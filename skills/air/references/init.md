@@ -4,7 +4,7 @@ Reuse conversation and project information. Ask only the next missing inputs. Ru
 
 ## Inputs
 
-Role question: “What would you like to add: credential issuance, verification, both, account login, or agentic wallets?” In interactive choices, label issuance **“Issue credentials — through AIR Kit or directly from your backend”**. Do not label it “issue from my backend,” which confuses responsibility with the trigger.
+Role question: “What would you like to add: credential issuance, verification, both, or account wallet?” In interactive choices, label issuance **“Issue credentials — through AIR Kit or directly from your backend”**. Do not label it “issue from my backend,” which confuses responsibility with the trigger.
 
 For issuer/both, separately ask: “How should issuance start: users claim through AIR Kit or your backend issues directly?” Record `--issuance sdk|direct|both`. In all cases the issuer backend authorizes and creates/signs, encrypts, and stores the credential. AIR Kit orchestrates the user flow; see [issuance.md](issuance.md).
 
