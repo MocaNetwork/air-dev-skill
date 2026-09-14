@@ -39,7 +39,7 @@ npx air-dev-skill keys --env sandbox
 npx air-dev-skill jwks --check https://<origin>/api/.well-known/jwks
 ```
 
-Docs MCP (optional, complementary): `https://docs.air3.com/mcp`.
+Docs MCP is optional: `https://docs.air3.com/mcp`. Without MCP, use the official web documentation and installed SDK/backend source.
 
 ## First command
 
@@ -49,15 +49,21 @@ Inside the agent:
 /air init
 ```
 
-Sandbox is the default. The agent asks for role, whether credentials already exist, a **Partner ID** from [Credential Dashboard → Account → General](https://developers.sandbox.air3.com/) (new partners), database, and frontend. It never invents that UUID. It never asks you for `ISSUER_ORIGIN` or claim URLs.
+Sandbox is the default. The agent collects only missing setup inputs: role, issuance trigger, authentication, app paths, existing configuration, and database/frontend choices where relevant. Obtain the Partner ID from [Credential Dashboard → Account → General](https://developers.sandbox.air3.com/). Existing deployment URLs are reused; local tunnel URLs are discovered from the running tunnel.
 
-Issuer path: clone [`air-issuer-service`](https://github.com/MocaNetwork/air-issuer-service) → generate or import keys into `apps/backend/.env` → extract issuer DID via the nest repl → optional Next app (JWKS + Partner JWT + `issueCredential`) → tunnel → Dashboard paste. Do not clone the issuer-service simulator.
+Issuer setup: inspect/clone and install [`air-issuer-service`](https://github.com/MocaNetwork/air-issuer-service) → configure the selected database → generate/import existing keys → migrations when needed → derive issuer DID → register issuer/endpoints → configure schemas/programs.
 
-Verifier path: no `SEED`, no Nest backend, no activation email. `/air verify` wires the SDK.
+Choose how issuance starts separately from the issuer role: AIR Kit, a direct backend event/job, or both. `issueCredential()` orchestrates login, credential discovery, selection, consent and AIR proxy requests. Direct issuance uses AIR `POST /auth/initialize-user` and `POST /dstorage/vcs`; it does not call issuer-hosted `/issue-vc`. The issuer backend remains responsible for authorization, source data, VC creation/signing, encryption and dStorage storage. See [the issuance contract](skills/air/references/issuance.md).
+
+Verifier setup generates signing keys without an issuer seed/backend. Account-only and verifier roles also support BYO auth. Generated token routes deny access until connected to verified authentication and operation authorization; existing routes are preserved.
+
+Record frontend/backend directories during init. New Next apps default to `apps/web`; keys and program IDs are written to that directory, including when the app has not yet been scaffolded. Existing `.env.example` files are preserved.
+
+Automated writes support **sandbox only**. Mainnet needs a separate integration and current AIR access/activation; the helpers reject production flags instead of relabeling sandbox identity. Sandbox issuer registration uses the Dashboard, according to the current official setup guide.
 
 ## Secrets
 
-`SEED`, `PARTNER_PRIVATE_KEY_DER`, `API_KEY`, and `ADMIN_API_KEY` are written to gitignored `apps/backend/.env` (and web `.env.local` when a frontend exists). The skill prints the issuer DID only. Never commit those files. Never put them under `NEXT_PUBLIC_*`.
+Issuer secrets are written to the recorded backend’s gitignored `.env`. Only Partner JWT signing configuration is copied to the web server’s `.env.local`; issuer seeds and API keys stay in the backend. Existing secrets cannot be rotated by the helpers. Never commit those files. Never put them under `NEXT_PUBLIC_*`.
 
 Sandbox and mainnet are separate partners, DIDs, and programs.
 
@@ -72,5 +78,5 @@ Harden: `audit`, `polish`, `document`
 | Piece | Role |
 | --- | --- |
 | This repo | Integration skill — context files, commands, detectors |
-| [docs.air3.com](https://docs.air3.com) / MCP | Live API and dashboard docs |
+| [AIR Kit docs](https://docs.air3.com) / MCP | Live API and dashboard docs |
 | [air-agentic-wallet-skill](https://github.com/MocaNetwork/air-agentic-wallet-skill) | Agent-sign and verify-by-agent scripts |

@@ -1,8 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { loadPartner } from './partner.mjs';
 
 export function backendDir(root, explicit) {
   if (explicit) return path.resolve(root, explicit);
+  const configured = loadPartner(root).fields['Backend directory'];
+  if (configured && configured !== 'none') return path.resolve(root, configured);
   const apps = path.join(root, 'apps', 'backend');
   if (fs.existsSync(path.join(apps, 'package.json')) || fs.existsSync(path.join(apps, 'src', 'issuer'))) {
     return apps;
@@ -20,8 +23,7 @@ export function backendDir(root, explicit) {
 export function hasIssuerBackend(root) {
   const dir = backendDir(root);
   return (
-    fs.existsSync(path.join(dir, 'package.json'))
-    || fs.existsSync(path.join(dir, 'src', 'issuer'))
+    fs.existsSync(path.join(dir, 'src', 'issuer'))
     || fs.existsSync(path.join(root, 'src', 'issuer'))
   );
 }
@@ -35,6 +37,8 @@ export function backendInstalled(root, explicit) {
 }
 
 export function webDir(root) {
+  const configured = loadPartner(root).fields['Web directory'];
+  if (configured && configured !== 'none') return path.resolve(root, configured);
   const appsWeb = path.join(root, 'apps', 'web');
   if (fs.existsSync(path.join(appsWeb, 'package.json'))) return appsWeb;
   for (const name of ['next.config.ts', 'next.config.js', 'next.config.mjs']) {

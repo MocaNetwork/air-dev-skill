@@ -8,6 +8,10 @@ How this repository talks to AIR Kit. Later `/air` commands read this file and `
 
 - Package: `@mocanetwork/airkit`
 - Version: {{sdkVersion}}
+- Backend commit: unknown — inspect checked-out source
+- SDK contract: unknown — inspect installed types
+- Issuance program: pending
+- Schema type and document URLs: pending
 - BUILD_ENV: {{buildEnv}}
 - credentialNetwork: {{credentialNetwork}}
 
@@ -20,7 +24,11 @@ How this repository talks to AIR Kit. Later `/air` commands read this file and `
 ## Issuance
 
 - Path: {{issuancePath}}
-- Browser never calls `/available-vc` or `/issue-vc`
+- AIR Kit orchestrates SDK issuance via AIR issuer proxy routes; the issuer backend authorizes, creates/signs, encrypts and stores the VC.
+- Direct issuance starts from a trusted backend event/job: `POST /auth/initialize-user` → issuer-side VC creation/signing/encryption → `POST /dstorage/vcs`.
+- Issuer API keys and protected backend handlers stay server-side.
+
+Documented AIR API bases: sandbox `https://api.sandbox.mocachain.org/v1`; production `https://mocachain-mainnet.api.air3.com/v1`.
 
 ## Verification
 

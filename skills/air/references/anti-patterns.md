@@ -13,8 +13,9 @@ Never do these. `detect.mjs` catches a subset.
 - Set `credentialSubject.id` in a schema class
 - Use a JDBC `DATABASE_URL`
 - Leave `ISSUER_ORIGIN` on localhost after a real claim
-- Pair `BUILD_ENV.SANDBOX` with `credentialNetwork: "mainnet"` or `"devnet"`
+- Mix sandbox configuration with another network
 - Send `x-api-key` to AIR / Moca chain APIs, or `x-partner-auth` to `/available-vc`
-- Change `/available-vc`, `/issue-vc`, or holder encryption parameters
+- Route direct backend issuance through issuer-hosted `/issue-vc`; direct issuance uses AIR `initialize-user` and `dstorage/vcs`
+- Change the verified backend wire contract or holder encryption to work around an integration error
 - Commit `.env` / `.env.local`
-- Print `SEED`, `API_KEY`, `ADMIN_API_KEY`, or private keys after the first write
+- Print `SEED`, `API_KEY`, `ADMIN_API_KEY`, or private keys in chat

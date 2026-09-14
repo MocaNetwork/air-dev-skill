@@ -1,43 +1,43 @@
-# /air register
+# Register configured endpoints and identity
 
-Two registrations. They are frequently confused. Never ask the user to invent `ISSUER_ORIGIN` or the claim paths — read `ISSUER_ORIGIN` from `apps/backend/.env` and derive the URLs.
+Inspect the actual partner, environment, and live endpoints. Current official setup: https://docs.air3.com/airkit/usage/credential/issuing-credentials (reviewed 2026-09-14). If the Dashboard differs, verify current instructions rather than insisting on a remembered field.
 
-## Self-serve (user pastes what the skill computed)
+## JWKS and application domain
 
-Dashboard page, after the tunnel is up:
-
-1. **JWKS URL** — `https://<web-tunnel>/api/.well-known/jwks`. Localhost fails.
-2. **Available VC API** — `${ISSUER_ORIGIN}/available-vc`
-3. **Issue VC API** (optional) — `${ISSUER_ORIGIN}/issue-vc`
-4. **Domains** — whitelist the web origin.
-
-Check the JWKS URL first:
+Choose the URL actually served: web `/api/.well-known/jwks`, or issuer `/.well-known/jwks` for a backend-only integration. Check it with:
 
 ```bash
-node <skill-base-dir>/scripts/jwks.mjs --check https://<web-origin>/api/.well-known/jwks
+node <skill-base-dir>/scripts/jwks.mjs --check <actual-public-https-jwks-url>
 ```
 
-## Manual (email the Moca Network / AIR team)
+Register that exact URL in Dashboard → Account → General → JWKS URL. Whitelist the actual web origin if the integration uses AIR Kit in a browser. Preserve existing registered origins; do not replace them with an ephemeral tunnel by default.
 
-There is no self-serve field for the issuer backend API key. Send all four. Copy `API_KEY` from `apps/backend/.env` — do not print it in chat.
+One Partner ID maps to one registered JWKS URL. When issuer and verifier capabilities use the same Partner ID, serve both public signing keys from that one JWKS document; use a second Partner ID only if separate JWKS URLs are required.
 
-| Item | Source | Share? |
-|---|---|---|
-| Issuer DID | `PARTNER.md` (from `issuer-did.mjs` / nest repl) | yes |
-| API key | `API_KEY` in `apps/backend/.env` — AIR sends it as `x-api-key` | yes |
-| Partner ID | Dashboard UUID / `PARTNER.md` | yes |
-| Issuer backend URLs | `${ISSUER_ORIGIN}/available-vc` and `${ISSUER_ORIGIN}/issue-vc` | yes |
+## Sandbox issuer
 
-Do **not** send `SEED`, `ADMIN_API_KEY`, or partner private keys.
+Current docs describe self-service under Issuer → Settings: register the derived issuer DID and issuer API key, then configure supported signature types and backend endpoints. Derive backend claim URLs from the recorded `ISSUER_ORIGIN` and verified handlers. Use the installed backend and selected program's supported signature type.
 
-Until AIR completes this, `/available-vc` and `/issue-vc` return **403** before any controller runs, or AIR never routes to you.
+The user can copy `API_KEY` from the gitignored backend configuration to the relevant Dashboard field. Do not print it in chat, put it into documentation, or ask for the seed/private signing key. Sandbox does not automatically require an activation email.
 
-Issuer/Verifier menus stay hidden until the DID is registered.
+After registration, create/select the schema and issuance program using [schema.md](schema.md).
 
-## After the user confirms
+## Verifier
+
+Register its signing JWKS and browser domain as applicable, then create/select a verification program. Do not generate an issuer seed/backend to enable verification by default. If credential menus are hidden, inspect the actual account entitlement and current Dashboard guidance; explain only that access step and obtain the required account enablement from AIR if necessary.
+
+## Mainnet
+
+Mainnet uses separate identity, keys, programs, and access. Current docs require AIR team involvement in activation. Prepare a reviewable handoff with public IDs/endpoints and explain where the issuer API key is securely supplied. Never send mail without explicit authorization. Do not include `SEED`, `ADMIN_API_KEY`, or private signing keys. Automated context/key/provision commands are sandbox-only; follow [environments.md](environments.md).
+
+## Record confirmed state
+
+Record each action only after it has actually been completed or the user confirms that specific action:
 
 ```bash
-node <skill-base-dir>/scripts/provision.mjs --env sandbox write-ids --activated yes --jwks-registered yes
+node <skill-base-dir>/scripts/provision.mjs --env sandbox write-ids --jwks-url <actual-url> --jwks-registered yes
+node <skill-base-dir>/scripts/provision.mjs --env sandbox write-ids --activated yes
+node <skill-base-dir>/scripts/provision.mjs --env sandbox write-ids --domain-whitelisted yes
 ```
 
-Then offer `/air issue` or `/air audit`.
+Issuer activation is inapplicable to a verifier-only setup. A live JWKS check does not prove Dashboard registration. A 403 does not by itself prove activation is missing: inspect the request route, credentials, and backend error before diagnosing it.

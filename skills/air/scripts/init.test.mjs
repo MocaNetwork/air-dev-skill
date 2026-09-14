@@ -53,8 +53,8 @@ describe('init.mjs', () => {
   });
 });
 
-describe('keys.mjs generate without backend', () => {
-  it('writes upstream backend env and does not print SEED', () => {
+describe('keys.mjs issuer prerequisites', () => {
+  it('writes upstream backend env after installation and does not print SEED', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'air-keys-'));
     const init = run([
       '--role', 'issuer',
@@ -64,6 +64,8 @@ describe('keys.mjs generate without backend', () => {
       '--project', dir,
     ], dir);
     assert.equal(init.status, 0, init.stderr);
+    fs.mkdirSync(path.join(dir, 'apps/backend/src/issuer'), { recursive: true });
+    fs.mkdirSync(path.join(dir, 'apps/backend/node_modules'), { recursive: true });
     const keys = path.join(path.dirname(fileURLToPath(import.meta.url)), 'keys.mjs');
     const result = spawnSync(process.execPath, [
       keys, '--env', 'sandbox', '--project', dir,
@@ -79,7 +81,7 @@ describe('keys.mjs generate without backend', () => {
     assert.ok(env.SD_JWT_JWKS);
     assert.equal(env.PARTNER_PUBLIC_KEY, undefined);
     assert.equal(env.AIR_API_ORIGIN, undefined);
-    assert.match(result.stdout, /Issuer DID: pending/);
+    assert.match(result.stdout, /issuer-did/);
   });
 
   it('refuses generate when Existing partner is yes, even with --force', () => {
@@ -92,12 +94,14 @@ describe('keys.mjs generate without backend', () => {
       '--project', dir,
     ], dir);
     assert.equal(init.status, 0, init.stderr);
+    fs.mkdirSync(path.join(dir, 'apps/backend/src/issuer'), { recursive: true });
+    fs.mkdirSync(path.join(dir, 'apps/backend/node_modules'), { recursive: true });
     const keys = path.join(path.dirname(fileURLToPath(import.meta.url)), 'keys.mjs');
     const result = spawnSync(process.execPath, [
       keys, '--env', 'sandbox', '--force', '--project', dir,
     ], { encoding: 'utf8', cwd: dir });
     assert.equal(result.status, 2);
-    assert.match(result.stderr, /Existing partner/);
+    assert.match(result.stderr, /Import the existing partner/);
     assert.equal(result.stderr.includes('0x'), false);
   });
 });

@@ -2,8 +2,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { airPath, partnerPath, renderAirTemplate, renderPartnerTemplate } from './lib/partner.mjs';
-import { ASSETS, parseArgs, projectRoot, writeText } from './lib/project.mjs';
-import { UUID_RE } from './lib/secrets.mjs';
+import { ASSETS, parseArgs, projectRoot, writeText, readText, ensureGitignore } from './lib/project.mjs';
+import { webDir, backendDir } from './lib/layout.mjs';
+import { assertSandbox } from './lib/environment.mjs';
+import { UUID_RE, upsertEnv, parseEnvFile } from './lib/secrets.mjs';
 
 const ROLES = ['issuer', 'verifier', 'both', 'account-only', 'agentic'];
 const DBS = ['docker', 'external', 'none'];
@@ -37,7 +39,10 @@ Options:
   --db docker|external|none
   --database-url <url>     required when --db external
   --frontend none|next|existing
-  --sdk-version <ver>      default: latest
+  --issuance sdk|direct|both  issuer trigger (default: sdk)
+  --backend-dir <dir>      existing or planned issuer directory
+  --web-dir <dir>          existing or planned web directory
+  --sdk-version <ver>      installed version, if known
   --force                  overwrite existing PARTNER.md / AIR.md
   --project <dir>
 `);
@@ -53,7 +58,7 @@ function main() {
   if (!ROLES.includes(role)) usage(2);
   if (!existing && !partnerId) usage(2);
   if (partnerId && !UUID_RE.test(partnerId)) {
-    process.stderr.write('Partner ID must be the Dashboard UUID. Never invent one.\n');
+    process.stderr.write('Partner ID must be the UUID from Dashboard → Account → General.\n');
     process.exit(2);
   }
 
@@ -64,10 +69,24 @@ function main() {
     process.exit(2);
   }
 
+  if (!['issuer', 'both'].includes(role) && db !== 'none') throw new Error('Database setup applies to issuer roles only.');
   const frontend = String(flags.frontend || 'none').toLowerCase();
   if (!FRONTENDS.includes(frontend)) usage(2);
 
   const root = path.resolve(flags.project || projectRoot());
+  const rootEnv = parseEnvFile(readText(path.join(root, '.env')));
+  assertSandbox(root, flags.env || 'sandbox', { ...rootEnv, NODE_ENV: ['issuer', 'both'].includes(role) ? rootEnv.NODE_ENV : undefined });
+  if (!['issuer', 'both'].includes(role) && flags.issuance) throw new Error('--issuance applies to issuer roles only.');
+  if (flags.auth && !['air-login', 'byo'].includes(flags.auth)) usage(2);
+  const issuer = role === 'issuer' || role === 'both';
+  const issuance = issuer ? String(flags.issuance || 'sdk') : 'none';
+  if (issuer && !['sdk', 'direct', 'both'].includes(issuance)) usage(2);
+  const backend = issuer ? path.relative(root, backendDir(root, flags['backend-dir'])) || '.' : 'none';
+  const detectedWeb = webDir(root);
+  if (frontend === 'existing' && !flags['web-dir'] && !detectedWeb) {
+    throw new Error('Set --web-dir to the existing app directory.');
+  }
+  const web = flags['web-dir'] || (frontend === 'next' ? 'apps/web' : frontend === 'existing' ? path.relative(root, detectedWeb) || '.' : 'none');
   const force = Boolean(flags.force);
   const authModel = flags['custom-auth'] || flags.auth === 'byo' ? 'byo' : 'air-login';
   const vertical = flags.vertical || 'unspecified';
@@ -83,8 +102,8 @@ function main() {
   const issuerBackend = role === 'issuer' || role === 'both' ? 'air-issuer-service' : 'none';
   const notes = [
     'Init wrote sandbox defaults. Production is a separate partner / DID / program set.',
-    existing ? 'Existing partner: do not generate a new SEED. Import the current .env after the backend is cloned.' : '',
-    db === 'external' ? 'Pass --database-url to keys.mjs. Do not print the URL.' : '',
+    existing ? 'Existing partner: import current signing configuration; issuer roles also preserve the issuer SEED.' : '',
+    db === 'external' ? 'External database connection is stored in the gitignored root .env for the keys step.' : '',
   ].filter(Boolean).join(' ');
 
   const partner = renderPartnerTemplate({
@@ -99,6 +118,9 @@ function main() {
     customAuth,
     database: db,
     frontend,
+    backendDirectory: backend,
+    webDirectory: web,
+    issuanceTrigger: issuance,
     jwksUrl: '',
     signingAlg: 'ES256',
     kid: partnerId,
@@ -113,22 +135,30 @@ function main() {
   });
 
   const air = renderAirTemplate({
-    sdkVersion: flags['sdk-version'] || 'latest',
+    sdkVersion: flags['sdk-version'] || 'unknown — inspect installed package before coding',
     buildEnv: 'SANDBOX',
     credentialNetwork: 'testnet',
     authModel,
-    issuancePath: ISSUANCE_BY_ROLE[role],
+    issuancePath: issuer ? `${issuance} trigger; issuer backend authorizes, creates, signs, encrypts and stores credentials` : ISSUANCE_BY_ROLE[role],
     verificationPath: VERIFY_BY_ROLE[role],
     paymaster: 'unset — record if the app sponsors gas',
   });
 
   writeText(partnerFile, partner);
   writeText(airFile, air);
-  writeText(path.join(root, '.env.example'), fs.readFileSync(path.join(ASSETS, 'env.example'), 'utf8'));
+  const exampleFile = path.join(root, '.env.example');
+  const createdExample = !fs.existsSync(exampleFile);
+  if (createdExample) writeText(exampleFile, fs.readFileSync(path.join(ASSETS, 'env.example'), 'utf8'));
+  if (db === 'external') {
+    const envFile = path.join(root, '.env');
+    ensureGitignore(root, ['.env', '.env.local']);
+    writeText(envFile, upsertEnv(readText(envFile) || '', { DATABASE_URL: flags['database-url'] }));
+    fs.chmodSync(envFile, 0o600);
+  }
 
   process.stdout.write(`Wrote ${partnerFile}\n`);
   process.stdout.write(`Wrote ${airFile}\n`);
-  process.stdout.write(`Wrote ${path.join(root, '.env.example')}\n`);
+  process.stdout.write(`${createdExample ? 'Wrote' : 'Preserved'} ${exampleFile}\n`);
   process.stdout.write(`Existing partner: ${existing ? 'yes' : 'no'}\n`);
   process.stdout.write(`Database: ${db}\n`);
   process.stdout.write(`Frontend: ${frontend}\n`);
@@ -137,20 +167,20 @@ function main() {
     if (db === 'docker') {
       process.stdout.write('\nNext (database): docker run --name air-issuer-pg -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=issuer-backend -p 5432:5432 -d postgres:16\n');
     }
-    process.stdout.write('Next: node scripts/issue.mjs --clone-backend --yes --install --dir apps/backend\n');
+    process.stdout.write('Next: /air issue — prepare the recorded issuer backend\n');
     if (existing) {
-      process.stdout.write('Then: node scripts/keys.mjs --env sandbox --import <path-to-existing.env>\n');
+      process.stdout.write('Then: /air keys --import <path-to-existing.env>\n');
     } else {
-      process.stdout.write('Then: node scripts/keys.mjs --env sandbox\n');
+      process.stdout.write('Then: /air keys\n');
     }
   } else if (role === 'verifier') {
     process.stdout.write('\nVerifier path: generate JWT keys if you call AIR verify APIs, then /air verify.\n');
-    process.stdout.write('No SEED, issuer backend, or activation email.\n');
+
   } else if (role === 'account-only') {
-    process.stdout.write('\nAccount-only: /air account. Login succeeding does not mean issue/verify will work.\n');
+    process.stdout.write('\nAccount-only: /air account.\n');
   } else {
     process.stdout.write('\nAgentic: /air agent — install air-agentic-wallet-skill. Do not call Privy.\n');
   }
 }
 
-main();
+try { main(); } catch (error) { console.error(error.message); process.exitCode = 2; }

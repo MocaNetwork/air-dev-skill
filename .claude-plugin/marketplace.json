@@ -5,7 +5,7 @@
     "description": "AIR Kit integration skill. One skill, 14 commands, traveling PARTNER.md + AIR.md context, and static detectors."
   },
   "owner": {
-    "name": "Moca Network",
+    "name": "AIR",
     "email": "developers@moca.network"
   },
   "plugins": [
@@ -14,7 +14,7 @@
       "description": "AIR Kit integration: /air init, issue, verify, audit. Partner JWT, JWKS, issuer DID, sandbox vs mainnet.",
       "version": "0.1.0",
       "author": {
-        "name": "Moca Network",
+        "name": "AIR",
         "email": "developers@moca.network"
       },
       "source": "./",

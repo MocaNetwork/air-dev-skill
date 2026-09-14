@@ -3,7 +3,7 @@
   "description": "AIR Kit integration: /air init, issue, verify, audit. Partner JWT, JWKS, issuer DID, sandbox vs mainnet.",
   "version": "0.1.0",
   "author": {
-    "name": "Moca Network",
+    "name": "AIR",
     "email": "developers@moca.network"
   },
   "homepage": "https://docs.air3.com",

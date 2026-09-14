@@ -4,6 +4,7 @@ import path from 'node:path';
 import { loadPartner, updatePartnerFields } from './lib/partner.mjs';
 import { backendDir, wantsFrontend, webEnvPath } from './lib/layout.mjs';
 import { ensureGitignore, parseArgs, projectRoot, readText, writeText } from './lib/project.mjs';
+import { assertSandbox } from './lib/environment.mjs';
 import { parseEnvFile, upsertEnv } from './lib/secrets.mjs';
 
 const REPL_INPUT = "console.log(get(CredentialIssuingService).issuerDID.string());\n";
@@ -47,17 +48,18 @@ function main() {
   }
 
   const backend = backendDir(root, flags.backend);
+  assertSandbox(root, 'sandbox', parseEnvFile(readText(path.join(backend, '.env'))));
   const { result, combined } = runRepl(backend);
   const did = parseIssuerDid(combined);
 
-  if (!did) {
+  if (!did || result.status !== 0 || result.error) {
     process.stderr.write('Could not parse issuer DID from pnpm run repl.\n');
     process.stderr.write('Confirm apps/backend has node_modules, .env (SEED + ISSUER_ORIGIN), then retry.\n');
     if (result.status) process.stderr.write(`repl exit ${result.status}\n`);
     process.exit(result.status || 1);
   }
 
-  const expected = String(flags['issuer-did'] || '').trim();
+  const expected = String(flags['issuer-did'] || partner.fields['Issuer DID'] || '').trim();
   if (expected && expected !== did) {
     process.stderr.write(`Issuer DID mismatch.\n  repl: ${did}\n  given: ${expected}\n`);
     process.exit(2);
@@ -81,4 +83,4 @@ function main() {
 }
 
 const invoked = process.argv[1] && path.basename(process.argv[1]) === 'issuer-did.mjs';
-if (invoked) main();
+if (invoked) { try { main(); } catch (error) { console.error(error.message); process.exitCode = 2; } }

@@ -16,6 +16,12 @@ const IGNORE_DIRS = new Set([
   '.turbo',
   '.cache',
   'coverage',
+  'skills',
+  'fixtures',
+  '__tests__',
+  'test',
+  'tests',
+  'examples',
   '.impeccable',
 ]);
 
@@ -50,12 +56,12 @@ export function parseArgs(argv = process.argv.slice(2)) {
 
 export function projectRoot(cwd = process.cwd()) {
   let dir = path.resolve(cwd);
+  let packageRoot;
   while (true) {
-    if (fs.existsSync(path.join(dir, 'PARTNER.md')) || fs.existsSync(path.join(dir, 'package.json'))) {
-      return dir;
-    }
+    if (fs.existsSync(path.join(dir, 'PARTNER.md'))) return dir;
+    if (!packageRoot && fs.existsSync(path.join(dir, 'package.json'))) packageRoot = dir;
     const parent = path.dirname(dir);
-    if (parent === dir) return path.resolve(cwd);
+    if (parent === dir) return packageRoot || path.resolve(cwd);
     dir = parent;
   }
 }
@@ -106,6 +112,7 @@ export function walkFiles(root, { exts, maxFiles = 4000 } = {}) {
         if (!IGNORE_DIRS.has(entry.name)) stack.push(full);
         continue;
       }
+      if (/\.(test|spec)\.[cm]?[jt]sx?$/.test(entry.name)) continue;
       if (exts && !exts.some((ext) => entry.name.endsWith(ext))) continue;
       out.push(full);
     }
@@ -120,5 +127,5 @@ export function rel(root, file) {
 export function isPlaceholder(value) {
   if (!value) return true;
   const v = String(value).trim();
-  return v === '' || v === '-' || v === 'pending' || v.startsWith('{{') || v.includes('REPLACE') || v.includes('your-');
+  return v === '' || v === '-' || v === 'pending' || v.startsWith('(') || v.startsWith('{{') || v.includes('REPLACE') || v.includes('your-');
 }

@@ -2,13 +2,15 @@
 import path from 'node:path';
 import { loadPartner, updatePartnerFields } from './lib/partner.mjs';
 import { ensureGitignore, parseArgs, projectRoot, readText, writeText } from './lib/project.mjs';
-import { parseEnvFile, upsertEnv } from './lib/secrets.mjs';
+import { webEnvPath, wantsFrontend, backendEnvPath } from './lib/layout.mjs';
+import { assertSandbox } from './lib/environment.mjs';
+import { UUID_RE, parseEnvFile, upsertEnv } from './lib/secrets.mjs';
 
-const ENVS = ['sandbox', 'production'];
+const ENVS = ['sandbox'];
 const PHASE2 = new Set(['createPartner', 'createIssuerDid', 'createApiKeys', 'createProgram', 'registerJwksUrl', 'activateIssuer']);
 
 function usage(code = 2) {
-  process.stderr.write(`Usage: node provision.mjs --env sandbox|production <action> [options]
+  process.stderr.write(`Usage: node provision.mjs --env sandbox <action> [options]
 
 v1 actions:
   write-ids              update PARTNER.md IDs and public env (never secrets)
@@ -24,23 +26,8 @@ Options:
   process.exit(code);
 }
 
-function phase2Stub(action, envName) {
-  process.stderr.write(`provision ${action} is not available in v1.
-
-This action needs an allowlisted AIR operator API (OTP partner create, hosted JWKS, remote activate).
-Use the Dashboard and /air register instead.
-
-Contract (do not invent curl):
-  --env ${envName}
-  allowlisted base URL + operator token when Phase 2 ships.
-
-Init path today:
-  1. Paste Partner ID from https://developers.sandbox.air3.com/
-  2. node issue.mjs --clone-backend --yes --install
-  3. node keys.mjs --env ${envName}   # or --import <existing.env>
-  4. /air register
-`);
-  process.exit(2);
+function phase2Stub(action) {
+  throw new Error(`${action} is not implemented. Use the current Dashboard workflow in /air register; no remote request was made.`);
 }
 
 function writeIds(root, envName, flags) {
@@ -50,6 +37,16 @@ function writeIds(root, envName, flags) {
     process.exit(2);
   }
 
+  const envFile = webEnvPath(root);
+  assertSandbox(root, envName, { ...parseEnvFile(readText(envFile)), NODE_ENV: undefined });
+  assertSandbox(root, envName, parseEnvFile(readText(backendEnvPath(root))));
+  if (flags['partner-id'] && !UUID_RE.test(flags['partner-id'])) throw new Error('Partner ID must be the Dashboard UUID.');
+  if (flags['partner-id'] && partner.fields['Partner ID'] && flags['partner-id'] !== partner.fields['Partner ID']) throw new Error('Partner identity cannot be replaced; use a separate project.');
+  if (flags['issuer-did'] && partner.fields['Issuer DID'] && flags['issuer-did'] !== partner.fields['Issuer DID']) throw new Error('Issuer DID cannot be replaced; investigate the identity mismatch.');
+  if (flags['jwks-url']) {
+    const url = new URL(flags['jwks-url']);
+    if (url.protocol !== 'https:' || ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) throw new Error('JWKS URL must use public HTTPS.');
+  }
   const updates = {};
   if (flags['partner-id']) updates['Partner ID'] = flags['partner-id'];
   if (flags['issuer-did']) updates['Issuer DID'] = flags['issuer-did'];
@@ -58,8 +55,9 @@ function writeIds(root, envName, flags) {
   if (flags['issue-program-id']) updates['Issuance program IDs'] = flags['issue-program-id'];
   if (flags['verify-program-id']) updates['Verification program IDs'] = flags['verify-program-id'];
   if (flags['schema-id']) updates['Schema IDs'] = flags['schema-id'];
-  if (flags.activated === 'yes') updates['Issuer activated'] = 'yes';
-  if (flags['jwks-registered'] === 'yes') updates['JWKS registered'] = 'yes';
+  for (const [flag, label] of [['activated', 'Issuer activated'], ['jwks-registered', 'JWKS registered'], ['domain-whitelisted', 'Domain whitelisted']]) {
+    if (['yes', 'no'].includes(flags[flag])) updates[label] = flags[flag];
+  }
 
   if (Object.keys(updates).length) updatePartnerFields(root, updates);
 
@@ -68,20 +66,19 @@ function writeIds(root, envName, flags) {
   if (after['Partner ID']) {
     publicEnv.NEXT_PUBLIC_PARTNER_ID = after['Partner ID'];
     publicEnv.PARTNER_ID = after['Partner ID'];
-    publicEnv.PARTNER_PRIVATE_KEY_KID = after.kid || after['Partner ID'];
-    publicEnv.PARTNER_ID = after['Partner ID'];
+
   }
   if (after['Issuer DID']) publicEnv.NEXT_PUBLIC_ISSUER_DID = after['Issuer DID'];
   if (after['Issuance program IDs']) publicEnv.NEXT_PUBLIC_ISSUE_PROGRAM_ID = after['Issuance program IDs'];
   if (after['Verification program IDs']) publicEnv.NEXT_PUBLIC_VERIFY_PROGRAM_ID = after['Verification program IDs'];
-  publicEnv.NEXT_PUBLIC_BUILD_ENV = envName === 'production' ? 'production' : 'sandbox';
+  publicEnv.NEXT_PUBLIC_BUILD_ENV = 'sandbox';
 
-  const envFile = path.join(root, '.env.local');
   ensureGitignore(root, ['.env', '.env.local']);
-  writeText(envFile, upsertEnv(readText(envFile) ?? '', { ...parseEnvFile(readText(envFile)), ...publicEnv }));
+  const wroteEnv = wantsFrontend(partner.fields) || Boolean(readText(envFile));
+  if (wroteEnv) writeText(envFile, upsertEnv(readText(envFile) ?? '', publicEnv));
 
-  process.stdout.write(`Updated PARTNER.md IDs only (${envName}). Secrets were not written.\n`);
-  process.stdout.write(`Public env names updated in ${envFile}\n`);
+  process.stdout.write(`Updated PARTNER.md identity and registration fields (${envName}). Secrets were not written.\n`);
+  if (wroteEnv) process.stdout.write(`Public env names updated in ${envFile}\n`);
 }
 
 function main() {
@@ -89,7 +86,8 @@ function main() {
   if (flags.help) usage(0);
   const envName = String(flags.env || '').toLowerCase();
   const action = String(flags._[0] || flags.action || '');
-  if (!ENVS.includes(envName) || !action) usage(2);
+  if (!ENVS.includes(envName)) throw new Error('Automated provisioning supports --env sandbox only. Production requires a separate integration.');
+  if (!action) usage(2);
 
   if (PHASE2.has(action)) phase2Stub(action, envName);
 
@@ -101,4 +99,4 @@ function main() {
   usage(2);
 }
 
-main();
+try { main(); } catch (error) { console.error(error.message); process.exitCode = 2; }

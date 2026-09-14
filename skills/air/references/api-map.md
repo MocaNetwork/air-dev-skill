@@ -1,22 +1,18 @@
-# API map
+# API boundaries
 
-Which host, which header.
-
-| Call | Base (sandbox) | Header |
+| Component | Operation | Authentication / implementation |
 |---|---|---|
-| Partner JWT validation (AIR fetches JWKS) | your public HTTPS origin | none |
-| `AirService` (SDK) | AIR Kit iframe / hosted widget | Partner JWT as `authToken` |
-| `POST /v2/auth/initialize-user` | `https://air.api.sandbox.air3.com` | `x-partner-id` |
-| `POST /v1/dstorage/vcs` | `https://api.sandbox.mocachain.org` | `x-partner-auth` |
-| `POST /credentials/verify-by-agent` | Moca chain API (see wallet skill) | AIR agent session, not issuer `x-api-key` |
-| `POST /v2/wallet/agent-sign` | URL from the handoff bundle | agent `signedMessage` + `agentSignature` |
-| `POST /available-vc`, `POST /issue-vc` | your `ISSUER_ORIGIN` | `x-api-key` |
-| `GET /credential-status/:nonce` | your `ISSUER_ORIGIN` | none |
-| `GET /.well-known/jwks` | your `ISSUER_ORIGIN` | none |
-| Admin issuance / revoke | your `ISSUER_ORIGIN` | `x-admin-api-key` |
+| Partner browser | `issueCredential()` / `verifyCredential()` | AIR Kit and operation-scoped Partner JWT; inspect installed types |
+| AIR proxy used by SDK | `GET /issuer/{issuerDidHash}/available-vc`, `POST /issuer/{issuerDidHash}/issue-vc` | SDK-managed AIR session/proxy requests; do not hand-code or guess the DID hash |
+| Issuer backend | `POST /available-vc`, `POST /issue-vc` | AIR-to-issuer forwarding for the hosted SDK flow; backend checks `x-api-key`; direct issuance uses dStorage instead |
+| AIR API (direct issuance) | `POST /auth/initialize-user`, `POST /dstorage/vcs` | Partner JWT in `x-partner-auth`; direct backend-to-AIR flow |
+| Issuer backend | `GET /credential-status/:nonce`, `GET /revocation-status/:nonce` | Public status checks under stable `ISSUER_ORIGIN` |
+| Issuer backend | JWKS route | Public route as implemented by that backend |
+| Partner web server | `POST /api/partner-jwt` | Verified session, operation authorization, then server signing |
+| Partner web server | `GET /api/.well-known/jwks` | Public keys only |
+| AIR account / dStorage APIs | `/auth/initialize-user` and `/dstorage/vcs` | Exact AIR API base and `x-partner-auth` contract; no guessed hosts/headers |
+| Wallet agent APIs | Agent signing and verification | Delegate to the installed wallet skill's supported workflow |
 
-Issuer DID is not an HTTP route. Read it from `PARTNER.md` or `issuer-did.mjs` (nest repl).
+Documented AIR API bases are `https://api.sandbox.mocachain.org/v1` (sandbox) and `https://mocachain-mainnet.api.air3.com/v1` (production). Backend origin comes from actual deployment/tunnel configuration. Issuer DID is an identifier derived from the backend, not an HTTP route.
 
-Production hosts differ; load [environments.md](environments.md) and do not reuse sandbox IDs.
-
-When docs and `air-issuer-service` disagree on a path or header name, the running backend wins for its own routes; docs win for what AIR expects.
+One Partner ID has one registered JWKS URL. If issuer and verifier share a Partner ID, publish both required public keys from that single JWKS document; request a second Partner ID only when separate JWKS URLs are genuinely required.

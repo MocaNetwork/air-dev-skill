@@ -1,27 +1,20 @@
 # Environments
 
-Init writes **sandbox**. Treat production as a separate integration.
+Automated writes in this skill support sandbox only. `--env production` is rejected before writing files. Read-only inspection can review either environment.
 
-## Sandbox (default)
+## Sandbox
 
 - Dashboard: https://developers.sandbox.air3.com/
-- SDK: `BUILD_ENV.SANDBOX`
-- Chain: Moca Testnet
-- Issuer backend `NODE_ENV=sandbox` (the service picks AIR / Moca origins from that value)
-- AIR API origin (typical): `https://air.api.sandbox.air3.com`
-- Moca chain / DStorage: `https://api.sandbox.mocachain.org` (`/v1/...`)
-- `credentialNetwork` must not be `"devnet"` (removed). Do not pair sandbox with `"mainnet"`.
+- AIR Kit uses `BUILD_ENV.SANDBOX`; confirm the installed version's network options.
+- Bundled backend configuration uses `NODE_ENV=sandbox`; inspect the checked-out backend for exact origins and supported variables.
+- Generated IDs and keys remain tied to this integration.
 
-## Production
+## Mainnet
 
-Requires approval. Separate Partner ID, issuer DID, programs, JWKS, and API keys.
+Use a separate project/configuration and the current official development-environments and registration documentation, discovered from https://docs.air3.com/llms.txt. Confirm mainnet access, the installed SDK's production enum/network options, and the real Dashboard origin. Do not guess a production host.
 
-- Dashboard: https://developers.air3.com/dashboard
-- SDK: `BUILD_ENV.PRODUCTION` + `credentialNetwork: "mainnet"`
-- Provisioning scripts **must** take `--env production` and must not reuse sandbox secrets
+The documented AIR API bases are `https://api.sandbox.mocachain.org/v1` for sandbox and `https://mocachain-mainnet.api.air3.com/v1` for production. In the SDK, the network values are `testnet` and `mainnet`; verify the installed package before writing configuration.
 
-## Isolation
+The assistant may implement a user-requested mainnet integration through targeted, reviewed configuration based on those sources, but must not invoke sandbox setup helpers against it. Record actual network, identity, SDK version, backend version and endpoints in separate context. Obtain mainnet IDs, issuer keys, programs and activation for that environment; never copy/relabel sandbox identity as production.
 
-Credentials, schemas, and programs do not travel across networks. Re-issue on the target network. A Testnet issuer DID is not a Mainnet issuer.
-
-`NEXT_PUBLIC_BUILD_ENV` on the web app must match the Dashboard the operator is looking at.
+Do not treat an approval already granted by the user as missing. AIR account access/activation and authorization to edit local code are separate requirements.

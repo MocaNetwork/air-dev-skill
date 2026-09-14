@@ -1,37 +1,17 @@
-# /air account
+# AIR account login
 
-Embed AIR Kit login. Required docs when MCP is available: `/airkit/quickstart/index`, `/airkit/usage/initialization`, `/airkit/usage/user-authentication`.
+Inspect the existing authentication and client framework. Follow [sources.md](sources.md) and installed AIR Kit types for construction, initialization, login, and cleanup. Install `@mocanetwork/airkit` in the actual frontend workspace if absent, then record the resolved version. Use the real Partner ID and chosen environment. Browser SDK calls belong in client code.
 
-## Install
+## AIR login
 
-```bash
-pnpm add @mocanetwork/airkit
-```
+Initialize AIR Kit with the installed version's supported options and invoke its login flow when needed. Reuse an existing session and avoid duplicate service initialization. Implement loading, cancellation, login failure, and logout/session cleanup using the actual return/event contract.
 
-Partner ID from `PARTNER.md` / `NEXT_PUBLIC_PARTNER_ID`. Never invent it.
+## BYO login
 
-```ts
-import { AirService, BUILD_ENV } from "@mocanetwork/airkit";
+Available to issuer, verifier, and account-only roles. Follow https://docs.air3.com/recipes/custom-auth-integration for the auth model, but verify its code examples against installed SDK types.
 
-const service = new AirService({ partnerId: process.env.NEXT_PUBLIC_PARTNER_ID! });
-await service.init({
-  buildEnv: BUILD_ENV.SANDBOX,
-  enableLogging: true,
-  preloadCredential: true,
-});
-const loggedIn = await service.login();
-```
+The application first validates its own session. Its server signs a dedicated login JWT containing Partner ID and the verified user's email. AIR Kit 1.11.1 removed `partnerUserId`; keep any partner application's user ID in its own database. Pass the token to `airService.login({ authToken })` if supported by the installed version. Identity must not come directly from client-provided email/user ID.
 
-`preloadCredential: true` warms issue/verify. The SDK renders in an iframe — run this in the browser (`"use client"` / `useEffect`).
+Use `keys.mjs --env sandbox` for signing-only configuration in account/verifier roles, then implement the generated token route's authentication adapter. Request `{ "operation": "login" }` only when Custom auth is enabled. Issuance and verification tokens have their own scopes and are not interchangeable with login tokens.
 
-Sandbox only in v1 init. Production: `BUILD_ENV.PRODUCTION` + `credentialNetwork: "mainnet"` after approval. See [environments.md](environments.md).
-
-## BYO auth
-
-Only if `PARTNER.md` says `Custom auth: yes`. Backend signs a Partner JWT with `email` and `partnerUserId`; frontend calls `airService.login({ authToken })`. Follow `/recipes/custom-auth-integration` on docs.air3.com. Do not clone a sample app.
-
-## Hard stop
-
-Login succeeding does **not** mean issue or verify will work. Those need a public HTTPS JWKS, a matching `kid`, and (for issue) an activated issuer. Say this out loud.
-
-Next: issuer → `/air schema` then `/air issue`. Verifier → `/air verify`. Agentic → `/air agent`.
+For subsequent credential work, follow the relevant issue/verify playbook and its JWKS prerequisites. Account-only work does not need an unsolicited warning about unrelated credential features.

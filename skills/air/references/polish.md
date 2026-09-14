@@ -1,13 +1,13 @@
-# /air polish
+# Polish
 
-Last-mile before a real claim. Read detect output first; polish does not replace audit.
+Improve the selected integration after checking [audit.md](audit.md).
 
-- **Fresh JWT per call.** Five-minute tokens. Reuse across a session looks like flaky 401s.
-- **Poll until ONCHAIN** if the SDK/docs say the credential is not usable at `PENDING`.
-- **CORS** on the issuer or its proxy: allow `*.air3.com`.
-- **Session gate** on `POST /api/partner-jwt` in production — the stub mints an issue-scoped token for anyone who can reach it.
-- **Errors:** map 401 → JWKS/kid/exp ([auth.md](auth.md)); 403 on issuer → activation / `x-api-key`; `must match format "uri"` → `credentialSubject.id`.
-- **Tunnels:** named tunnels or `ISSUER_ORIGIN` goes stale and revocation URLs die.
-- **Env split:** re-run `detect.mjs` after edits.
+- Request short-lived tokens per operation through authenticated code; use `issue`, `verify`, or dedicated custom login claims appropriately.
+- Handle login/consent cancellation, authorization failure, backend errors, and actual SDK result states.
+- If verification immediately follows issuance, use the installed SDK's supported on-chain wait option when the program needs it. Do not invent a polling endpoint or status enum.
+- Restrict browser CORS to the actual required origins using the backend framework's supported configuration; a literal wildcard string is not necessarily a valid subdomain allowlist.
+- Diagnose errors from the actual response and component. A 401 can involve token/JWKS/session configuration; a 403 can involve permissions/API credentials/registration. Neither proves a single cause.
+- Keep issuer origins stable for credential status URLs; avoid replacing a deployed origin with an ephemeral tunnel.
+- Recheck affected code/configuration after edits and report remaining runtime prerequisites accurately.
 
-Do not add custom-auth, paymaster, or CAK during polish unless `PARTNER.md` already committed to them.
+Authentication and secret handling are setup requirements, not optional polish. Do not add unrelated auth/wallet/paymaster features.

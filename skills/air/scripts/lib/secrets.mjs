@@ -32,7 +32,7 @@ const IMPORT_REQUIRED = [
   'ADMIN_API_KEY',
 ];
 
-export function generateSecrets({ kid, alg = 'ES256' } = {}) {
+export function generateSecrets({ kid, alg = 'ES256', issuer = true } = {}) {
   if (alg !== 'ES256') {
     throw new Error('v1 keys.mjs generates ES256 (P-256) only, matching air-issuer-service bin/generate-secrets');
   }
@@ -45,12 +45,11 @@ export function generateSecrets({ kid, alg = 'ES256' } = {}) {
   const jwks = { keys: [{ ...jwk, use: 'sig', alg: 'ES256', kid }] };
 
   return {
-    SEED: `0x${randomBytes(32).toString('hex')}`,
+    ...(issuer ? { SEED: `0x${randomBytes(32).toString('hex')}` } : {}),
     PARTNER_PRIVATE_KEY_KID: kid,
     PARTNER_PRIVATE_KEY_DER: der,
     SD_JWT_JWKS: JSON.stringify(jwks),
-    API_KEY: randomBytes(32).toString('hex'),
-    ADMIN_API_KEY: randomBytes(32).toString('hex'),
+    ...(issuer ? { API_KEY: randomBytes(32).toString('hex'), ADMIN_API_KEY: randomBytes(32).toString('hex') } : {}),
   };
 }
 
@@ -63,6 +62,7 @@ export function jwksFromDer(der, kid) {
   delete jwk.dp;
   delete jwk.dq;
   delete jwk.qi;
+  if (jwk.kty !== 'RSA' && !(jwk.kty === 'EC' && jwk.crv === 'P-256')) throw new Error('Only RSA and P-256 partner keys are supported.');
   const alg = jwk.kty === 'RSA' ? 'RS256' : 'ES256';
   return JSON.stringify({ keys: [{ ...jwk, use: 'sig', alg, kid }] });
 }
@@ -155,12 +155,13 @@ export function pickBackendEnv(values) {
   return out;
 }
 
-export function importPartnerEnv(env) {
-  const missing = IMPORT_REQUIRED.filter((key) => !env[key] || String(env[key]).startsWith('{{'));
+export function importPartnerEnv(env, { issuer = true } = {}) {
+  const required = issuer ? IMPORT_REQUIRED : ['PARTNER_ID', 'PARTNER_PRIVATE_KEY_KID', 'PARTNER_PRIVATE_KEY_DER'];
+  const missing = required.filter((key) => !env[key] || String(env[key]).startsWith('{{'));
   if (missing.length) {
     throw new Error(`Imported env is missing: ${missing.join(', ')}`);
   }
-  if (!SEED_RE.test(env.SEED)) {
+  if (issuer && !SEED_RE.test(env.SEED)) {
     throw new Error('SEED must be 0x plus 64 hex characters');
   }
   if (!UUID_RE.test(String(env.PARTNER_ID).trim())) {
@@ -174,7 +175,12 @@ export function importPartnerEnv(env) {
   if (!jwks) {
     jwks = jwksFromDer(env.PARTNER_PRIVATE_KEY_DER, env.PARTNER_PRIVATE_KEY_KID);
   } else {
-    JSON.parse(jwks);
+    const published = JSON.parse(jwks);
+    const expected = JSON.parse(jwksFromDer(env.PARTNER_PRIVATE_KEY_DER, env.PARTNER_PRIVATE_KEY_KID)).keys[0];
+    const actual = published.keys?.find(key => key.kid === expected.kid);
+    if (!actual || ['kty', 'crv', 'x', 'y', 'n', 'e'].some(field => actual[field] !== expected[field])
+      || (actual.alg && actual.alg !== expected.alg)) throw new Error('Imported JWKS does not match the signing key and kid.');
+    if (published.keys.some(key => ['d', 'p', 'q', 'dp', 'dq', 'qi'].some(field => field in key))) throw new Error('JWKS must contain public keys only.');
   }
 
   return {

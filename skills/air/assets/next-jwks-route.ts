@@ -8,6 +8,10 @@ export async function GET() {
 
   try {
     const jwks = JSON.parse(raw);
+    if (!Array.isArray(jwks.keys) || !jwks.keys.length
+      || jwks.keys.some((key: Record<string, unknown>) => !key.kid || ["d", "p", "q", "dp", "dq", "qi"].some(field => field in key))) {
+      return NextResponse.json({ error: "Invalid public JWKS" }, { status: 500 });
+    }
     return NextResponse.json(jwks, {
       headers: { "Cache-Control": "public, max-age=3600" },
     });

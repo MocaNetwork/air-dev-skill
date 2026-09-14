@@ -1,21 +1,9 @@
-# Verification
+# Verification troubleshooting
 
-Verifier apps do not host `air-issuer-service` unless the same partner is also an issuer.
+Use [verify.md](verify.md) for the complete setup and [sources.md](sources.md) for current API evidence. Verifier apps do not need an issuer backend unless they also issue credentials.
 
-## SDK
+If an issued credential cannot be verified, inspect token scope/JWKS, selected network and program, schema types, supported proof/disclosure mode, expiry/revocation, and whether required on-chain confirmation has completed. Check the credential's actual status URL and backend behavior before attributing failure to `ISSUER_ORIGIN`.
 
-`airService.verifyCredential` with a Partner JWT and a verification program ID. Same JWKS rules as issue. Same network as the credential.
+AIR Kit 1.11.1 returns the current compliant presentation in `verifiablePresentation`. Treat `zkProofs`, `transactionHash`, and `disclosedData` as deprecated compatibility fields that are not reliably populated. For SD_JWT_VC, require both `fieldsToDisclose` and `nonce`; the program determines on-chain versus off-chain verification, so do not invent an `offchain` argument.
 
-If issuance succeeded and verify fails, check schema key/types (merklization) and `credentialStatus` — a bad `ISSUER_ORIGIN` at issue time embeds a dead status URL. Re-issue after fixing the origin.
-
-## Agent
-
-`/credentials/verify-by-agent` in `query_match` mode. Use `MocaNetwork/air-agentic-wallet-skill` (`moca-credential-verifier` scripts). Never call Privy.
-
-## Selective disclosure
-
-Early-access. Load `/airkit/early-access/selective-disclosure` only when the user needs a subset of fields.
-
-## Dashboard
-
-Verifier menus appear only after AIR registers an issuer DID on that partner — even if this app only verifies. If menus are missing, the partner still needs the [register.md](register.md) pack (often from the issuer side).
+Missing Dashboard menus are an account access/configuration problem to investigate using [register.md](register.md), not proof that a verifier must create its own issuer.

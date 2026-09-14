@@ -76,7 +76,12 @@ export function updatePartnerFields(root, updates) {
   let text = current.text;
   for (const [label, value] of Object.entries(updates)) {
     if (value === undefined) continue;
-    text = setLabeledField(text, label, value);
+    try {
+      text = setLabeledField(text, label, value);
+    } catch {
+      // Add newly introduced context fields to projects initialized by older versions.
+      text = `${text.trimEnd()}\n- ${label}: ${value}\n`;
+    }
   }
   writeText(current.file, text);
   return loadPartner(root);

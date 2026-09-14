@@ -11,8 +11,8 @@ Write `docs/AIR-INTEGRATION.md` (or update `README.md` if the user asked). Inclu
 - JWKS URL and `kid` convention
 - Issuance path and verification path from AIR.md
 - Env table split: `NEXT_PUBLIC_*` vs server-only names
-- How to run backend + web, migrate (only if `Database` is set), and `GET /.well-known/jwks`
+- How to run backend + web, migrate (only if `Database` is docker or external), and the actual JWKS route
 - Register checklist (link, do not paste API keys)
 - Related: docs MCP, this `/air` skill, wallet skill if agentic
 
-If detect still has P0s, list them under "Known blockers".
+Include confirmed blockers separately from unverified source observations. Record installed SDK version, backend commit, issuance trigger, app directories, and the actual SDK parameter/result contract.

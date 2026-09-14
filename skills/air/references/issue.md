@@ -1,94 +1,37 @@
-# /air issue
+# Implement issuance
 
-Scaffold or repair issuance. Read `PARTNER.md` + `AIR.md` first. The path is **self-hosted `air-issuer-service`** plus `airService.issueCredential`.
+Read `PARTNER.md`, `AIR.md`, [issuance.md](issuance.md), and [sources.md](sources.md). Respect `Issuance trigger: sdk|direct|both` and the recorded app paths. If the trigger is unknown, ask which experience the user wants; frontend presence alone does not determine it.
 
-Init (A–C: clone, keys, DID) must already have run for a greenfield issuer. This file is J, D, K. Then hand off to [register.md](register.md).
+## Backend
 
-**Backend only** clone: https://github.com/MocaNetwork/air-issuer-service
+Use the existing issuer backend. For a new `air-issuer-service` project, follow [init.md](init.md): clone/install → configure chosen database → generate/import keys → migrations if needed → derive DID. `issue.mjs` clones and installs only; its printed plan does not implement issuance.
 
-**Frontend:** do not clone a sample app. Use a default Next scaffold (`create-next-app`) or routes in the existing app. Copy JWKS and Partner JWT stubs from this skill (`scripts/jwks.mjs emit`). Implement `AirService` + `issueCredential` from [account.md](account.md) and the snippet below.
+Inspect schema registration and eligibility logic. Finish [schema.md](schema.md), using actual Dashboard IDs and source-data rules. Do not offer a real claim with an empty schema or invented program. Backend boot, program registration, and successful credential issuance are separate milestones.
 
-Custom-auth is opt-in only (`PARTNER.md`). Follow `/recipes/custom-auth-integration` on docs.moca.network — do not switch the frontend to a sample repo.
+## SDK-led flow
 
-Never ask the user for `ISSUER_ORIGIN`, `/available-vc`, `/issue-vc`, or the JWKS URL.
+Use the existing frontend framework. If Next was selected, scaffold at the recorded web directory and preserve its existing `.env.local`. If scaffolding refuses a nonempty directory, scaffold into a temporary sibling directory and copy the generated application files without replacing that environment file. Inspect package scripts and choose actual backend/web ports; do not assume both can use port 3000.
 
-## Existing codebase
-
-Audit against [issuance.md](issuance.md) and [auth.md](auth.md). Announce what already exists. Fill gaps. Do not clone on top of a working tree.
-
-## Greenfield backend
-
-Already covered by [init.md](init.md) steps E–G. Ask once, then:
+For Next App Router, create only missing routes:
 
 ```bash
-node <skill-base-dir>/scripts/issue.mjs --clone-backend --yes --install --dir apps/backend
+node <skill-base-dir>/scripts/jwks.mjs emit --target <recorded-web-directory> --project <project-root>
 ```
 
-Do **not** change `/available-vc`, `/issue-vc`, or `/credential-status/:nonce`. If CORS is enabled, allow `*.air3.com`.
+The helper writes JWKS, token route, and an authentication adapter. Existing files are preserved and must be inspected/adapted, not assumed compatible. Connect `air-token-auth.ts` to verified application authentication (existing session or validated AIR login token) and operation authorization. For cookie sessions, use the app's origin/CSRF protections. Test that anonymous and unauthorized requests fail before tunneling.
 
-Database and `migration:up` belong to the init runbook (`Database` field). Do not start Postgres here unless that field is `docker` or `external`.
+The app requests its operation-specific Partner JWT with `POST /api/partner-jwt` and JSON `{ "operation": "issue" }`. `issueCredential()` is the client-side entry point: it orchestrates AIR login, discovery, selection, confirmation, and the registered issuer calls. The issuer backend owns authorization, source-data retrieval, credential creation/signing, encryption, and storage. The current detailed SDK reference still shows a required `credentialSubject` parameter while the newer overview describes backend-driven discovery; inspect the installed AIR Kit types and target docs version before choosing the exact call. Do not fabricate holder data, SDK flags, or response properties.
 
-## J — Frontend (only if `Frontend` is `next`)
+For another framework, adapt the server helpers to its routing and verified session model. A static frontend needs a server-side token/JWKS service. `Frontend: none` skips local UI creation; document how the separate client calls the issuer integration if SDK issuance was selected.
 
-`Frontend: none` — skip this step and JWKS emit.
+## Direct issuance
 
-`Frontend: next`:
+Implement the trusted backend event/job with `POST /auth/initialize-user` followed by issuer-side authorization/data loading/VC creation-signing-encryption and `POST /dstorage/vcs`. Keep all issuer responsibilities on the backend. Do not create a frontend or JWT browser route solely for direct issuance, and do not route direct issuance through issuer-hosted `/issue-vc`. Persist and report the returned `storagePath` only after the dStorage request succeeds.
 
-```bash
-npx create-next-app@latest
-```
+## Public endpoints and registration
 
-Wait for the user to confirm the app directory before emitting routes.
+Reuse an existing deployment origin. For local development, start the actual backend/web processes, verify their ports, then open HTTPS tunnels where needed. Record the observed origins; set backend `ISSUER_ORIGIN` before a real claim and restart if configuration changed.
 
-`Frontend: existing` — add the two API routes and a client page to the existing app.
+Serve JWKS from either the issuer backend's verified `/.well-known/jwks` route or the web app's `/api/.well-known/jwks`. Backend-only setups do not require a web tunnel. Record the exact live URL, then follow [register.md](register.md).
 
-## D — JWKS / Partner JWT stubs (only if `Frontend` is not `none`)
-
-```bash
-node <skill-base-dir>/scripts/jwks.mjs emit --target <web-root>
-```
-
-The JWKS route serves `SD_JWT_JWKS`. The Partner JWT route signs with `PARTNER_PRIVATE_KEY_DER` and `PARTNER_PRIVATE_KEY_KID`.
-
-Browser flow:
-
-```
-airService.issueCredential({ authToken, issuerDid, credentialId, credentialSubject })
-  → AIR validates JWT against JWKS, resolves holder
-  → POST /available-vc, POST /issue-vc with x-api-key
-```
-
-The browser **never** calls Nest claim routes.
-
-```ts
-await air.issueCredential({
-  authToken, // from POST /api/partner-jwt, fresh each call
-  issuerDid: process.env.NEXT_PUBLIC_ISSUER_DID!,
-  credentialId: process.env.NEXT_PUBLIC_ISSUE_PROGRAM_ID!,
-  credentialSubject: { /* hint only; schema class is source of truth */ },
-});
-```
-
-`credentialSubject` here is not the signed source of truth. `generateCredentialData` is.
-
-Install: `pnpm add @mocanetwork/airkit jose`. `jose` is server-only.
-
-## K — Public HTTPS
-
-AIR cannot reach localhost. The skill sets `ISSUER_ORIGIN=http://localhost:3000` for local boot. Before a real claim, replace it with the tunnel origin (no trailing slash) and restart. Do not ask the user to invent the origin — run the tunnel and write the URL the tunnel prints.
-
-```bash
-cloudflared tunnel --url http://localhost:3000   # issuer
-cloudflared tunnel --url http://localhost:3001   # web / JWKS
-```
-
-Claim URLs the skill fills into the register pack:
-
-- `${ISSUER_ORIGIN}/available-vc`
-- `${ISSUER_ORIGIN}/issue-vc`
-
-Then [register.md](register.md). After the tunnel exists, guide the user to paste JWKS URL, Available VC API, and Issue VC API (optional) on the Dashboard. The skill supplies the strings; the user only pastes.
-
-## 401 on issueCredential
-
-Load [auth.md](auth.md). Usual causes: JWKS not registered, not HTTPS, `kid` mismatch, expired token, missing `scope: "issue"`.
+Run [audit.md](audit.md), obtain a fresh issuance token through authenticated code, and execute the selected flow. Report the returned result and what was actually verified. If the next operation needs on-chain confirmation, use the installed SDK's documented wait option; do not invent a polling status API.

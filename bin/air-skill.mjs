@@ -36,12 +36,12 @@ Install:
 Commands:
   detect [--json] [paths...]
   jwt --scope issue|verify [--exp 300]
-  keys --env sandbox|production [--partner-id <uuid>] [--import <env>]
+  keys --env sandbox [--partner-id <uuid>] [--import <env>]
   issuer-did [--backend <dir>]
   jwks emit [--target <dir>] | --check <url>
-  init --role <role> [--partner-id <uuid>] [--existing] [--db docker|external|none] [--frontend none|next|existing]
+  init --role <role> [--partner-id <uuid>] [--existing] [--db docker|external|none] [--frontend none|next|existing] [--issuance sdk|direct|both] [--web-dir <dir>] [--backend-dir <dir>]
   context [--json]
-  provision --env sandbox|production <action>
+  provision --env sandbox <action>
   issue [--clone-backend] [--yes] [--install]
   verify [--check]
 

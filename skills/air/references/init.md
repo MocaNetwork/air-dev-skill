@@ -1,139 +1,78 @@
-# /air init · keys · provision
+# Setup, keys, and context
 
-Init interviews once and writes traveling context. Keys change secrets on disk after the backend exists. Provision updates IDs only.
+Reuse conversation and project information. Ask only the next missing inputs. Run init when those needed for the chosen role are available; no extra confirmation round.
 
-## Interview
+## Inputs
 
-STOP and ask. Do not invent a Partner ID. Do not ask for `ISSUER_ORIGIN`, `/available-vc`, `/issue-vc`, or a JWKS URL — the skill produces those later.
+Role question: “What would you like to add: credential issuance, verification, both, account login, or agentic wallets?” In interactive choices, label issuance **“Issue credentials — through AIR Kit or directly from your backend”**. Do not label it “issue from my backend,” which confuses responsibility with the trigger.
 
-Keep to these focused rounds (issuer / both). Skip database and frontend for verifier / account-only / agentic.
+For issuer/both, separately ask: “How should issuance start: users claim through AIR Kit or your backend issues directly?” Record `--issuance sdk|direct|both`. In all cases the issuer backend authorizes and creates/signs, encrypts, and stores the credential. AIR Kit orchestrates the user flow; see [issuance.md](issuance.md).
 
-1. **Role:** issuer / verifier / both / account-only / agentic
-2. **Existing partner?** new credentials vs they already have Partner ID, SEED, keys, and maybe an issuer DID
-3. **Partner ID** (new partners, or existing if they have it handy): send them to the Dashboard, wait for paste. Existing partners may skip this if the ID lives in the `.env` they will import.
-4. **Auth** (issuer/both only): AIR Kit login (default) vs BYO / custom-auth
-5. **Database** (issuer/both only): docker / I have Postgres (`--db external --database-url`) / none
-6. **Frontend** (issuer/both only): none (backend only) / scaffold Next / existing app
+Collect as applicable:
 
-Sandbox Dashboard: https://developers.sandbox.air3.com/ → Account → General → Partner ID (UUID).
+- Existing partner configuration or new keys. Existing verifiers may have only signing keys, not an issuer seed.
+- Partner ID from Dashboard → Account → General. Existing partners may defer it until importing their configuration. Sandbox Dashboard: https://developers.sandbox.air3.com/.
+- Authentication for any role that logs users in: AIR login or existing/BYO auth (`--auth air-login|byo`). Account-only and verifier roles can use BYO auth too.
+- Frontend: existing app / create Next / none. Inspect existing paths; record `--web-dir`. New Next apps default to `apps/web`, recorded before keys are written. An SDK frontend may live in another application: `--frontend none` does not imply direct issuance.
+- Issuer backend: inspect existing implementation before cloning; record `--backend-dir` (default `apps/backend`). The bundled backend helpers support `air-issuer-service`; adapt other backends against verified contracts.
+- Database for issuer roles only: none / Docker / existing Postgres. For external Postgres supply `--db external --database-url <url>`; init stores it in a gitignored root `.env` for the keys step. Do not print credentials. Skip database questions for verifier/account/agentic roles.
 
-Production is a separate partner / DID / program set. Init always writes **sandbox** defaults. Load [environments.md](environments.md) only if they insist on mainnet.
+Do not ask for URLs the skill is about to generate. Reuse deployed origins already configured. If an existing remote service's URL is unknown and cannot be discovered, ask for that actual URL; do not replace it with a tunnel.
 
-Optional: vertical (loyalty, gaming, fintech, events, ads, agents).
-
-Show each scaffold command separately when asking what to run next. Do not batch them into one silent script.
-
-## Write files
+## Write context
 
 ```bash
-node <skill-base-dir>/scripts/init.mjs --role <role> --partner-id <uuid> [--existing] [--auth air-login|byo] [--db docker|external|none] [--database-url <url>] [--frontend none|next|existing] [--vertical loyalty]
+node <skill-base-dir>/scripts/init.mjs --role <role> --partner-id <uuid> --auth <air-login|byo> --frontend <none|next|existing> [--web-dir <dir>] [--issuance sdk|direct|both] [--backend-dir <dir>] [--existing] [--db none|docker|external] [--database-url <url>]
 ```
 
-`--partner-id` is required unless `--existing`. Refuse overwrite unless the user asked to redo init (`--force`).
+`--partner-id` is required unless `--existing`. Init creates `PARTNER.md`, `AIR.md`, and `.env.example` if absent; it preserves an existing `.env.example`. Use `--force` only for an explicitly requested context reset, never to repair a missing field. Update individual fields instead. Context placeholders indicate unfinished setup, not verified facts. Init is sandbox-only.
 
-Then tell them what was written: `PARTNER.md`, `AIR.md`, `.env.example`.
+## Issuer/both sequence
 
-## Issuer or both — ordered runbook
+1. Record choices and paths. Inspect existing backend and package scripts. Clone/install only if missing:
 
-Gates come from `PARTNER.md`: `Existing partner`, `Database`, `Frontend`.
+   ```bash
+   node <skill-base-dir>/scripts/issue.mjs --clone-backend --yes --install
+   ```
 
-### A — init
+   The helper uses the recorded backend directory. If cloning previously succeeded but installation failed, use `issue.mjs --install --yes` to install in that existing directory. Record the resulting backend commit in `AIR.md` before adapting its API.
 
-```bash
-node <skill-base-dir>/scripts/init.mjs --role issuer --partner-id <uuid> --db <docker|external|none> --frontend <none|next|existing>
-```
+2. Configure the chosen database. `none`: no Docker/migrations, and verify that the checked-out backend supports no-database development before booting. `docker`: start a local Postgres only if not already running, using the agreed port and database. `external`: use the supplied connection. Inspect the backend's migration requirements.
 
-Existing partner: add `--existing` and omit `--partner-id` if it will come from the imported env.
+3. Generate or import configuration:
 
-### F — database (only if `Database` is not `none`)
+   ```bash
+   node <skill-base-dir>/scripts/keys.mjs --env sandbox
+   # Existing partner instead:
+   node <skill-base-dir>/scripts/keys.mjs --env sandbox --import <existing-env-file>
+   ```
 
-`Database: docker`:
+   The backend must be cloned and installed. Keys writes issuer configuration and, when selected, signing configuration to the recorded web directory, even before that app is scaffolded. It never rotates existing secrets. It does not boot the backend or extract the DID automatically.
 
-```bash
-docker run --name air-issuer-pg -e POSTGRES_PASSWORD=postgres \
-  -e POSTGRES_DB=issuer-backend -p 5432:5432 -d postgres:16
-```
+4. Run the backend's migrations only when a database was selected, then:
 
-`Database: external`: keep the user's `DATABASE_URL` and pass `--database-url` to `keys.mjs`. Do not invent a host.
+   ```bash
+   node <skill-base-dir>/scripts/issuer-did.mjs
+   ```
 
-`Database: none`: skip docker and skip migrations. Upstream stubs the EntityManager when `DATABASE_URL` is unset, so the backend and repl still boot (dev only; no issuance history).
+   The helper runs the backend repl, validates successful execution and any recorded/expected DID, and records the result. On failure, diagnose the actual backend error; preserve keys and retry the DID step.
 
-### E + G — clone backend, then install
+5. Continue [issue.md](issue.md) for the chosen trigger, [register.md](register.md) for setup, and [schema.md](schema.md) for schemas and issuance programs. Build local code while registration is pending; attempt real credentials only after prerequisites are confirmed.
 
-```bash
-node <skill-base-dir>/scripts/issue.mjs --clone-backend --yes --install --dir apps/backend
-```
+## Verifier / account login
 
-Do not generate keys before this clone. The DID script needs the Nest app.
+No issuer backend, issuer seed, or issuer API keys. For verifier or BYO login, use the same keys command: it generates signing keys only, or imports `PARTNER_ID`, `PARTNER_PRIVATE_KEY_KID`, `PARTNER_PRIVATE_KEY_DER`, and optional public `SD_JWT_JWKS`.
 
-### B — keys (generate or import)
-
-New partner:
-
-```bash
-node <skill-base-dir>/scripts/keys.mjs --env sandbox [--database-url <url>]
-```
-
-Existing partner:
-
-```bash
-node <skill-base-dir>/scripts/keys.mjs --env sandbox --import <path-to-existing.env> [--issuer-did did:air:...]
-```
-
-Writes `apps/backend/.env` with the upstream names only. Never prints `SEED` or private keys. If `node_modules` is present, this step runs the repl automatically.
-
-Refuse `--import` skip: if `Existing partner: yes`, do not call `keys.mjs` without `--import`.
-
-### H — migrate (only if `Database` is not `none`)
-
-```bash
-cd apps/backend && npx mikro-orm migration:up
-```
-
-Tied to the database answer. Never run this when `Database: none`.
-
-### I + C — issuer DID
-
-Automatic from `keys.mjs` when the backend is installed. Otherwise:
-
-```bash
-echo 'console.log(get(CredentialIssuingService).issuerDID.string());' | pnpm run repl -
-```
-
-or:
-
-```bash
-node <skill-base-dir>/scripts/issuer-did.mjs --backend apps/backend
-```
-
-That writes `Issuer DID` on `PARTNER.md` and `NEXT_PUBLIC_ISSUER_DID` when a frontend env file exists. Equivalent ID write:
-
-```bash
-node <skill-base-dir>/scripts/provision.mjs --env sandbox write-ids --issuer-did did:air:...
-```
-
-Show the DID to the user. Do not ask them to invent it.
-
-Then continue with [issue.md](issue.md) for frontend / tunnel (J, D, K) and [register.md](register.md) (L).
-
-## Verifier
-
-Skip `SEED`, issuer backend, `API_KEY`, and the activation email. Still collect Partner ID. Generate a **server-only** signing key + JWKS if they will call AIR verify APIs. Offer `/air verify`. No Nest fork.
-
-## Account-only
-
-Partner ID + [account.md](account.md). Warn: login can succeed while issue/verify is dead (no JWKS).
+Create/use the recorded web application, emit missing routes, connect authentication, and register public JWKS. Then use [verify.md](verify.md) or [account.md](account.md). AIR login alone does not require generating issuer secrets. If the Dashboard lacks credential access, inspect the actual account state with [register.md](register.md); do not automatically turn a verifier into an issuer.
 
 ## Agentic
 
-Do not copy wallet scripts. Load [agent.md](agent.md).
+Use [agent.md](agent.md). Let the wallet skill collect its own requirements instead of generating issuer secrets.
 
-## provision.mjs
+## Recording observed configuration
 
 ```bash
-node <skill-base-dir>/scripts/provision.mjs --env sandbox|production write-ids [--issuer-did ...] [--jwks-url ...]
+node <skill-base-dir>/scripts/provision.mjs --env sandbox write-ids --schema-id <id> --issue-program-id <id> --verify-program-id <id>
 ```
 
-`--env` is required. Updates PARTNER.md **IDs only**.
-
-`createPartner`, `registerJwksUrl`, `activateIssuer`, and other remote actions are Phase 2 stubs. Do not invent curl. Point at the Dashboard and `/air register`.
+Supply only values applicable to the task. This updates context and the recorded web environment; it creates no remote resources. `createPartner`, `createIssuerDid`, `createApiKeys`, `createProgram`, `registerJwksUrl`, and `activateIssuer` are unsupported. Mainnet: [environments.md](environments.md).

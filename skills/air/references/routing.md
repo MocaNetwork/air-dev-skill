@@ -1,23 +1,16 @@
 # No-argument routing
 
-Read this when the user invokes `/air` with no argument. They are asking what to do next. Never auto-run a command.
+An invocation of `/air` without a task asks for next steps. Inspect current context and suggest up to three applicable commands with short reasons. Do not start setup or show every command unless useful or requested.
 
-`context.mjs` has already run. If it printed `NO_PARTNER_MD`, lead with `/air init` and still show the Commands table from SKILL.md.
+Use helper recommendations as hints. Respect role and trigger:
 
-Otherwise read the JSON from `node <skill-base-dir>/scripts/context.mjs --json` and lead with the **2–3 highest-value next commands**, each with a one-line reason. Then show the full command table grouped Setup / Build / Harden.
+- Missing context → init.
+- Issuer needing a backend → issue; backend installed but missing keys → keys; configured backend missing DID → issuer-did.
+- Verifier or BYO login missing signing keys → keys, without an issuer backend.
+- Missing public JWKS/registration → register when the endpoint is ready, otherwise implement it in the selected app.
+- Registered issuer missing schema/program → schema; missing SDK/direct implementation → issue for the selected trigger.
+- Verifier missing program/integration → verify.
+- Account-only → account; agentic → agent.
+- Existing implementation → audit, then polish for the requested feature.
 
-Use the printed `recommendations` array. If you reason further, keep this order:
-
-1. No `PARTNER.md` → init
-2. Issuer role, no cloned backend → issue (`--clone-backend --install`)
-3. Existing partner, backend present, no `SEED` → keys `--import`
-4. New partner, backend present, no `SEED` → keys
-5. Keys present, issuer DID missing → issuer-did
-6. DID present, issuer not activated → register
-7. Activated, no `issueCredential` → issue (frontend / schema)
-8. Issue exists, verify missing, role is verifier or both → verify
-9. Code present → audit then polish
-10. Role `account-only` → account (warn that login ≠ issue/verify)
-11. Role `agentic` → agent (install the wallet skill)
-
-Keep it to 2–3 pointed picks with the exact command to type. The menu is the fallback.
+Source detections do not prove success. A direct-only or backend-only issuer does not need an `issueCredential` call in this repository. Refresh context when state changes.

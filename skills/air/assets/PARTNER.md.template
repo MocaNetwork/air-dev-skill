@@ -15,6 +15,9 @@
 - Custom auth: {{customAuth}}
 - Database: {{database}}
 - Frontend: {{frontend}}
+- Backend directory: {{backendDirectory}}
+- Web directory: {{webDirectory}}
+- Issuance trigger: {{issuanceTrigger}}
 
 ## Keys
 

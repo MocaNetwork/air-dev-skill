@@ -1,30 +1,23 @@
-# /air verify
+# Verification
 
-Verifier-only apps skip `SEED`, issuer backend, `API_KEY`, and the activation email. They still need a Partner ID and, if they sign Partner JWTs, a public HTTPS JWKS.
+Verifier-only apps use signing keys and public registered JWKS without an issuer seed, Nest backend, or issuer API keys. Complete [init.md](init.md)'s verifier path and [register.md](register.md). BYO auth is supported for verifier roles.
 
-## SDK path (default)
+Create/select a verification program in Dashboard → Verifier → Program. Confirm schema, trusted issuer restrictions, proof type, disclosure requirements, and off-chain/on-chain mode. Publish as required and record the actual ID:
 
-```ts
-await air.verifyCredential({
-  authToken,          // Partner JWT; scope as required by the verify API
-  programId: process.env.NEXT_PUBLIC_VERIFY_PROGRAM_ID!,
-});
+```bash
+node <skill-base-dir>/scripts/provision.mjs --env sandbox write-ids --verify-program-id <actual-id>
 ```
 
-Program ID comes from Dashboard → Verifier → Programs. Same network as the issuer. Testnet credentials are invisible on mainnet.
+Obtain a fresh Partner JWT with `scope: "verify"` through the authenticated token endpoint using `{ "operation": "verify" }`. Follow [sources.md](sources.md) and inspect installed `verifyCredential` types. Use `authToken` and the selected `programId`; supply disclosure fields/nonce only as required by that version and program.
 
-Selective disclosure: holders reveal a subset of fields. See `/airkit/early-access/selective-disclosure` when the task needs it.
+For AIR Kit 1.11.1, an SD_JWT_VC verification request requires both `fieldsToDisclose` and `nonce`. The compliant result payload is `verifiablePresentation`; `zkProofs`, `transactionHash`, and `disclosedData` are deprecated and may be absent. Verification mode is configured by the program (on-chain or off-chain); do not pass a removed `offchain` option.
 
-## Agent path
-
-`POST /credentials/verify-by-agent` (query_match). Do not reimplement. Load [agent.md](agent.md) and reuse `moca-credential-verifier` scripts from `npx skills add MocaNetwork/air-agentic-wallet-skill`.
-
-## Checklist
+Implement consent cancellation, no matching credential, non-compliance, expiry/revocation, and success according to the actual returned union. Do not invent response fields or treat every resolved promise as compliance. Same-network credentials and program configuration are required.
 
 ```bash
 node <skill-base-dir>/scripts/verify.mjs --check
 ```
 
-Then implement `verifyCredential` in the existing app, or a small Next page that logs in and runs the program. No Nest fork.
+This checks recorded prerequisites, not live SDK verification. Run a real verification in the app when configured and authorized; otherwise report the precise pending prerequisite.
 
-Record program IDs in PARTNER.md via `provision.mjs write-ids --verify-program-id`.
+Agent verification: use [agent.md](agent.md), not a reimplementation of wallet signing/session logic. Additional context: [verification.md](verification.md).
