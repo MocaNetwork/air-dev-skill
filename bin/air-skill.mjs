@@ -17,6 +17,7 @@ const aliases = {
   issue: 'issue.mjs',
   verify: 'verify.mjs',
   'issuer-did': 'issuer-did.mjs',
+  vct: 'vct.mjs',
 };
 
 const installCmds = new Set(['install', 'update', 'uninstall', 'list']);
@@ -35,9 +36,10 @@ Install:
 
 Commands:
   detect [--json] [paths...]
-  jwt --scope issue|verify [--exp 300]
+  jwt --operation issue|verify [--exp 300]
   keys --env sandbox [--partner-id <uuid>] [--import <env>]
-  issuer-did [--backend <dir>]
+  issuer-did [--check] [--backend <dir>]   derive did:web from ISSUER_ORIGIN
+  vct plan --spec <file> | schema --spec <file> --schema-id <id> | --check <url>
   jwks emit [--target <dir>] | --check <url>
   init --role <role> [--partner-id <uuid>] [--existing] [--db docker|external|none] [--frontend none|next|existing] [--issuance sdk|direct|both] [--web-dir <dir>] [--backend-dir <dir>]
   context [--json]

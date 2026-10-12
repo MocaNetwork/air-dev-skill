@@ -1,38 +1,70 @@
 # Issuance responsibilities and contracts
 
-Two ways to start issuance share the same issuer responsibility. The partner's backend authorizes issuance, loads trusted source data, builds/signs the VC, encrypts it for the holder, stores it in dStorage, and makes the result/reference available through the integration. AIR Kit orchestrates the client experience; it does not become the credential issuer.
+Two ways to start issuance share the same issuer responsibility. The partner's issuer backend authorizes issuance, loads trusted source data, builds and signs the SD-JWT VC under its `did:web` issuer DID, binds it to the holder, encrypts it for the holder, and stores the envelope in dStorage. AIR Kit orchestrates the client experience; it does not become the credential issuer. Reference implementation: `air-issuer-service@main_sd-jwt-vc`.
 
 ## SDK-led issuance
 
-1. The partner app calls `airService.issueCredential()` with its issuance program/schema configuration and an optional identifier when supported by the installed SDK.
+1. The partner app calls `airService.issueCredential({ authToken, issuerDid, credentialId, credentialSubject: {} })`. `authToken` is an issuance Partner JWT (`partnerId`, `scope: "issue"`, `iat`, `exp`, header `typ: "JWT"`), `issuerDid` the did:web DID, and `credentialId` the issuance program ID. Pass `{}` as `credentialSubject`; the backend supplies the authoritative claims.
 2. AIR Kit ensures the user is logged into AIR.
-3. The SDK discovers available credentials through AIR's `GET /issuer/{issuerDidHash}/available-vc` proxy.
-4. The user selects a credential and confirms issuance.
-5. The SDK calls AIR's `POST /issuer/{issuerDidHash}/issue-vc` proxy.
-6. AIR forwards holder DID, public key, schema, and identifier to the issuer backend according to the configured backend contract.
-7. The issuer backend performs authorization, data retrieval, VC generation/signing, encryption, and dStorage persistence.
-8. The SDK returns the issuance result/reference defined by its installed version to the partner app.
+3. AIR calls the registered issuer `POST /available-vc` with `holderDID`, `pubKey`, `userId`, optional `schemaId`, and `proofType: "SD_JWT_VC"`. The backend returns `{ data: [...] }` previews whose `credentialSubject` is encrypted to `pubKey`.
+4. The user reviews the decrypted preview and confirms.
+5. AIR calls `POST /issue-vc` with the same identity, the required `schemaId`, and the holder `signingKey` (`{ jwk: EC P-256 }`).
+6. The backend loads the final claims, sets `sub` to the holder DID and `cnf` to `signingKey.jwk`, signs the SD-JWT VC, encrypts it to `pubKey`, records it when a database is configured, uploads it to dStorage, and returns `201` with an empty body.
+7. The SDK promise resolves on success and rejects on failure. It does not return the VC or a storage path.
 
-These AIR proxy routes are distinct from the self-hosted backend's `POST /available-vc` and `POST /issue-vc`. Do not send the issuer's API key to the browser or directly call its protected handlers from browser code. Do not manually reimplement SDK proxy calls or guess how `issuerDidHash` is calculated.
+Both issuer endpoints require `x-api-key: <API_KEY>`, the value registered with AIR. Use `userId` (the partner identifier AIR resolved) for eligibility and data, not `holderDID` alone. Do not send the issuer API key to the browser, call these handlers from browser code, or change their request/response shapes.
 
-The SDK parameters and return shape vary by version. Before writing a call, follow [sources.md](sources.md), inspect installed types, and record the actual contract. If an older SDK expects `credentialSubject`, obtain it through the verified server-side preview flow; never substitute an empty hint or let browser input authorize issuance. A backend handler may return an empty body while the SDK exposes a result through its orchestration; inspect each layer independently.
+By default `issueCredential` resolves before the credential's on-chain record (hashes and status metadata) is confirmed. Pass `waitForOnchainCompletion: true` when the next step, such as an immediate verification, depends on it. It replaced the removed `offchain` parameter; whether a program writes on-chain is a Dashboard program setting.
 
 ## Direct backend issuance
 
-A trusted backend event or job can issue without an interactive SDK flow. The documented sequence is:
+A trusted backend event or job issues without an interactive SDK flow. With the reference service, the partner's own servers call:
 
-1. Call AIR's `POST /auth/initialize-user` with the recipient email and an issuance-scoped Partner JWT in `x-partner-auth`. The response provides AIR's `userId`, holder `did`, and `publicKey`; AIR's UUID is not necessarily the partner application's primary user ID.
-2. The issuer backend authorizes the recipient, loads source data, builds and signs the VC, and encrypts the resulting envelope.
-3. Store the encrypted envelope with AIR's `POST /dstorage/vcs` using `holderDid`, `schemaId`, `expiresAt`, `data`, `iv`, `authTag`, `encryptedKey`, and optional `externalId`. A successful response is `201` with `storagePath`, `state`, `envelopeVersion`, and `createdAt`.
+```bash
+curl -X POST "$ISSUER_ORIGIN/admin/issue-vc" \
+  -H "x-admin-api-key: $ADMIN_API_KEY" -H "content-type: application/json" \
+  -d '{ "userId": "<email AIR knows>", "schemaId": "<SCHEMA_ID>", "vct": "<REGISTERED_VCT>",
+        "expiration": "<future ISO 8601>", "credentialSubject": { ... }, "disclosureFrame": { "_sd": [ ... ] } }'
+```
 
-Use the documented `batch-issue-vc-csv` pattern or the installed backend's equivalent for batch work. Direct issuance does **not** call the issuer-hosted `/issue-vc` endpoint; that endpoint is the AIR-to-issuer route used by the hosted SDK flow. The issuer backend remains responsible for authorization, data retrieval, VC generation/signing, encryption, and storage in every mode.
+- `userId` must be the email AIR knows the user by. The service resolves or creates the AIR Account with `POST {AIR_API_ORIGIN}/v2/auth/initialize-user`, which returns the holder DID, encryption public key, and signing public key, so direct credentials are holder-bound too.
+- `credentialSubject` must not contain reserved claims: `cnf`, `exp`, `iat`, `id`, `iss`, `nonce`, `status`, `sub`, `vct`, `vct#integrity`. `disclosureFrame` is optional; by default every top-level claim is selectively disclosable.
+- No backend schema class is required for this route, but the Dashboard credential type and issuance program still are.
+- Only partner servers call `/admin/*`. Keep `ADMIN_API_KEY` out of browsers and logs. Persist and report results only after the request succeeds; history is at `GET /admin/issuance-history` when a database is configured.
 
-Both paths preserve issuer authorization and source-data ownership. An identifier is lookup context, not proof of entitlement. AIR-supplied holder identity is trusted only over the authenticated AIR-to-issuer boundary. Direct jobs must resolve holder identity through a trusted server flow.
+A backend that implements the AIR calls itself uses two different surfaces:
+
+| Call | Host (sandbox / production) | Authentication |
+|---|---|---|
+| `POST /v2/auth/initialize-user` | `https://air.api.sandbox.air3.com` / `https://air.api.air3.com` | `x-partner-id: <PARTNER_ID>` header; body `{ "partnerJwt": <JWT with partnerId, scope "issue", recipient email> }` |
+| `POST /dstorage/vcs` | `https://api.sandbox.mocachain.org/v1` / `https://mocachain-mainnet.api.air3.com/v1` | `x-partner-auth: <Partner JWT with scope "issue", without email>`; body includes `holderDid`, `proofType: "SD_JWT_VC"`, `schemaId`, `expiresAt`, `data`, `iv`, `authTag`, `encryptedKey`, optional `externalId` |
+
+The VC must carry the returned signing key in `cnf` and be encrypted to the returned encryption key before storage. Direct issuance does **not** call the AIR-facing `/issue-vc`.
+
+Both paths preserve issuer authorization and source-data ownership. An identifier is lookup context, not proof of entitlement. AIR-supplied holder identity is trusted only over the authenticated AIR-to-issuer boundary. Direct jobs must resolve recipients through a trusted server flow.
 
 ## Backend implementation
 
-For `air-issuer-service`, inspect the checked-out `.env.example`, config, controllers, and schema base class before changing code. Common configuration includes `SEED`, `PARTNER_ID`, `PARTNER_PRIVATE_KEY_KID`, `PARTNER_PRIVATE_KEY_DER`, `SD_JWT_JWKS`, `API_KEY`, `ADMIN_API_KEY`, `ISSUER_ORIGIN`, and optional `DATABASE_URL`. Confirm network selection from source rather than adding guessed API-origin variables.
+For `air-issuer-service`, inspect the checked-out README, `.env.example`, `src/app.controller.ts`, and `src/issuer/sd-jwt-vc-schemas/` before changing code. Configuration: `NODE_ENV`, optional `DATABASE_URL`, `ISSUER_ORIGIN`, `PARTNER_ID`, `PARTNER_PRIVATE_KEY_KID`, `PARTNER_PRIVATE_KEY_ALG`, `PARTNER_PRIVATE_KEY_DER`, `PARTNER_JWKS`, `API_KEY`, `ADMIN_API_KEY`; optional `AIR_API_ORIGIN`, `MOCA_CHAIN_API_ORIGIN` (both default per `NODE_ENV`), and `SD_JWT_TSL_PARTITION_SIZE`.
 
-`SEED` determines issuer identity and must be preserved. Read DID with the installed backend repl using `issuer-did.mjs`. Confirm no-database boot is supported when that option was chosen. Never use a cryptographic reimplementation to work around a failed backend boot.
+`ISSUER_ORIGIN` is the issuer identity: the DID is `did:web:<host>`, served with the public keys at `/.well-known/did.json` and `/.well-known/jwt-vc-issuer`; credentials are signed with `kid` `<did>#<PARTNER_PRIVATE_KEY_KID>`. Preserve it once credentials exist. Read the DID with `issuer-did.mjs`; never reimplement signing or encryption to work around a failed backend boot.
 
-Schema implementation: [schema.md](schema.md). Keep the backend's wire format and encryption implementation intact. Check actual status-route construction before explaining credential revocation URLs.
+Schema implementation: [schema.md](schema.md). Keep the backend's wire format and encryption implementation intact. If CORS is enabled on the backend or a proxy, allow `*.air3.com`.
+
+### "Issuer is temporarily unavailable"
+
+The browser message "Issuer is temporarily unavailable" (`ISSUER_BACKEND_UNAVAILABLE`) comes from AIR's credential API, in sandbox `POST https://credential-testnet.api.sandbox.air3.com/v2/issuer/<partnerId>/issue-vc`. A 403, 502, or 503 there becomes that screen, and so does a 500 from the issuer's own `POST /issue-vc`. It does not prove the issuer is unreachable: on one traced claim AIR's call to `/available-vc` returned 201, and `/issue-vc` returned 500 because dStorage rejected the partner JWT.
+
+Read the issuer log before diagnosing. The reference service does not log HTTP requests and Nest does not log 4xx, so add temporary request logging of method, path, status, `schemaId`, and the `x-api-key` length only (never the key, tokens, or claims). Then:
+
+- No issuer request: AIR is still calling the URL registered in the Dashboard, often a dead tunnel host. Compare it with `PARTNER.md` → Issuer endpoints.
+- Issuer 403: the Dashboard issuer API key does not match the backend `API_KEY`.
+- Issuer 201 on `/available-vc`, then 500 on `/issue-vc`: AIR reached the issuer, and the failure is inside issuance or dStorage. For dStorage `401 Invalid x-partner-auth`, check the Dashboard JWKS URL and `kid` as described in [auth.md](auth.md).
+
+## Revocation and status
+
+All routes run on the issuer service and need a database:
+
+- Find a credential's `revocationNonce` with `GET /admin/issuance-history?holderDid=…&schemaId=…`, revoke with `POST /admin/revoke` `{ "nonce": "<revocationNonce>" }` (`x-admin-api-key`). Revocation is one-way; to change a credential, revoke it and issue a new one.
+- `GET /revocation-status/:nonce` returns `{ "isRevoked": boolean }` immediately and is registered as `revocationStatusApiUrl`.
+- Optional IETF Token Status List: set `SD_JWT_TSL_PARTITION_SIZE` (a multiple of 8) before the first credential that should carry `status`; it cannot change afterwards. Revocations reach verifiers only after `POST /admin/publish-token-status-list`, so schedule it from one runner and cache `GET /statuslist/:partition` no longer than the publish interval.

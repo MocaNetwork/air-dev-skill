@@ -105,7 +105,8 @@ export function walkFiles(root, { exts, maxFiles = 4000 } = {}) {
     }
     for (const entry of entries) {
       if (entry.name.startsWith('.') && entry.name !== '.env' && entry.name !== '.env.local' && entry.name !== '.env.example') {
-        if (entry.isDirectory()) continue;
+        // .well-known holds the JWKS route, so it is part of the application.
+        if (entry.isDirectory() && entry.name !== '.well-known') continue;
       }
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) {

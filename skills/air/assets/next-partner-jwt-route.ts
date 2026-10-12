@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { createPrivateKey, sign } from "node:crypto";
-import { authorizeAirToken } from "./air-token-auth";
+import { createPrivateKey, randomBytes, sign } from "node:crypto";
+import { authorizeAirToken, storeVerificationNonce } from "./air-token-auth";
 
 export const runtime = "nodejs";
 const allowedOperations: string[] = [/* AIR_ALLOWED_OPERATIONS */];
@@ -25,7 +25,7 @@ export async function POST(request: Request) {
     const jwk = key.export({ format: "jwk" });
     const alg = jwk.kty === "RSA" ? "RS256" : jwk.kty === "EC" && jwk.crv === "P-256" ? "ES256" : null;
     if (!alg) throw new Error("Unsupported signing key");
-    const published = JSON.parse(process.env.SD_JWT_JWKS || "{}");
+    const published = JSON.parse(process.env.PARTNER_JWKS || process.env.SD_JWT_JWKS || "{}");
     const match = published.keys?.find((entry: { kid?: string }) => entry.kid === kid);
     if (!match || ["kty", "crv", "x", "y", "n", "e"].some(field => match[field] !== jwk[field])
       || (match.alg && match.alg !== alg)) throw new Error("JWKS mismatch");
@@ -34,11 +34,20 @@ export async function POST(request: Request) {
     if (operation === "login") {
       if (!user.email) throw new Error("Missing authenticated email");
       claims.email = user.email;
-    } else claims.scope = operation;
+    } else claims.scope = operation; // "issue" for issueCredential, "verify" for verifyCredential
     const encode = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
     const data = `${encode({ alg, kid, typ: "JWT" })}.${encode(claims)}`;
     const signature = sign("sha256", Buffer.from(data), { key, ...(alg === "ES256" ? { dsaEncoding: "ieee-p1363" as const } : {}) });
-    return NextResponse.json({ token: `${data}.${signature.toString("base64url")}` }, { headers: { "Cache-Control": "no-store" } });
+    const token = `${data}.${signature.toString("base64url")}`;
+    if (operation === "verify") {
+      // One-time nonce for the SD-JWT key-binding JWT; the verify-presentation route consumes it.
+      const nonce = randomBytes(16).toString("base64url");
+      if (!(await storeVerificationNonce(user, nonce))) {
+        return NextResponse.json({ error: "Verification nonce storage is not configured" }, { status: 500 });
+      }
+      return NextResponse.json({ token, nonce }, { headers: { "Cache-Control": "no-store" } });
+    }
+    return NextResponse.json({ token }, { headers: { "Cache-Control": "no-store" } });
   } catch {
     return NextResponse.json({ error: "Partner token configuration is incomplete" }, { status: 500 });
   }

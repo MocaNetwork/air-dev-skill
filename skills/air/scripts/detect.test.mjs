@@ -21,12 +21,15 @@ describe('detect', () => {
     assert.ok(ids.has('jwt-exp-too-long'));
     assert.ok(ids.has('air-md-network'));
     assert.ok(ids.has('kid-mismatch'));
+    assert.equal(findings.find((f) => f.id === 'issuer-did-origin-mismatch')?.severity, 'P0');
+    assert.ok(ids.has('verify-without-nonce'));
+    assert.ok(ids.has('removed-offchain-option'));
+    assert.ok(ids.has('deprecated-verification-fields'));
     assert.ok(findings.some((f) => f.severity === 'P0'));
   });
 
   it('accepts a clean sandbox issuer fixture', () => {
     const findings = detect(path.join(here, 'fixtures', 'detect-clean'));
-    const p0 = findings.filter((f) => f.severity === 'P0');
-    assert.deepEqual(p0, []);
+    assert.deepEqual(findings, []);
   });
 });

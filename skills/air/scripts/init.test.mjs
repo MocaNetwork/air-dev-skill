@@ -34,6 +34,11 @@ describe('init.mjs', () => {
     assert.match(example, /^NODE_ENV=sandbox/m);
     assert.equal(example.includes('AIR_API_ORIGIN'), false);
     assert.equal(example.includes('IDEN3_METHOD'), false);
+    assert.doesNotMatch(example, /^SEED=/m);
+    assert.match(example, /^PARTNER_JWKS=/m);
+    assert.equal(fields['Credential format'], 'SD_JWT_VC');
+    assert.equal(fields['Backend branch'], 'main_sd-jwt-vc');
+    assert.equal(fields['Issuer registered'], 'no');
   });
 
   it('allows --existing without --partner-id', () => {
@@ -54,7 +59,7 @@ describe('init.mjs', () => {
 });
 
 describe('keys.mjs issuer prerequisites', () => {
-  it('writes upstream backend env after installation and does not print SEED', () => {
+  it('writes SD-JWT backend env after installation and does not print secrets', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'air-keys-'));
     const init = run([
       '--role', 'issuer',
@@ -71,17 +76,20 @@ describe('keys.mjs issuer prerequisites', () => {
       keys, '--env', 'sandbox', '--project', dir,
     ], { encoding: 'utf8', cwd: dir });
     assert.equal(result.status, 0, result.stderr);
-    assert.equal(result.stdout.includes('0x'), false);
     const env = parseEnvFile(fs.readFileSync(path.join(dir, 'apps', 'backend', '.env'), 'utf8'));
+    for (const secret of [env.PARTNER_PRIVATE_KEY_DER, env.API_KEY, env.ADMIN_API_KEY]) assert.equal(result.stdout.includes(secret), false);
     assert.equal(env.NODE_ENV, 'sandbox');
     assert.equal(env.DATABASE_URL, '');
     assert.equal(env.ISSUER_ORIGIN, 'http://localhost:3000');
-    assert.match(env.SEED, /^0x[0-9a-f]{64}$/i);
+    assert.equal(env.SEED, undefined);
     assert.ok(env.PARTNER_PRIVATE_KEY_DER);
-    assert.ok(env.SD_JWT_JWKS);
+    assert.equal(env.PARTNER_PRIVATE_KEY_ALG, 'ES256');
+    assert.ok(env.PARTNER_JWKS);
+    assert.equal(env.SD_JWT_JWKS, undefined);
     assert.equal(env.PARTNER_PUBLIC_KEY, undefined);
     assert.equal(env.AIR_API_ORIGIN, undefined);
     assert.match(result.stdout, /issuer-did/);
+    assert.match(result.stdout, /ISSUER_ORIGIN/);
   });
 
   it('refuses generate when Existing partner is yes, even with --force', () => {

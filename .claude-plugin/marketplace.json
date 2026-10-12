@@ -11,8 +11,8 @@
   "plugins": [
     {
       "name": "air",
-      "description": "AIR Kit integration: /air init, issue, verify, audit. Partner JWT, JWKS, issuer DID, sandbox vs mainnet.",
-      "version": "0.1.0",
+      "description": "AIR Kit SD-JWT VC integration: /air init, issue, verify, audit. Partner JWT, JWKS, did:web issuer, backend presentation checks, sandbox vs production.",
+      "version": "0.2.0",
       "author": {
         "name": "AIR",
         "email": "developers@moca.network"
@@ -25,6 +25,7 @@
         "moca",
         "credentials",
         "jwks",
+        "sd-jwt",
         "airkit"
       ],
       "skills": [

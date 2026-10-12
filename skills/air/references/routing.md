@@ -1,15 +1,16 @@
 # No-argument routing
 
-An invocation of `/air` without a task asks for next steps. Inspect current context and suggest up to three applicable commands with short reasons. Do not start setup or show every command unless useful or requested.
+An invocation of `/air` without a task asks for next steps. Inspect current context and offer up to three applicable commands as choices in the structured question tool ([questions.md](questions.md)), each with its short reason as the description. Do not start setup or show every command unless useful or requested.
 
 Use helper recommendations as hints. Respect role and trigger:
 
 - Missing context → init.
-- Issuer needing a backend → issue; backend installed but missing keys → keys; configured backend missing DID → issuer-did.
+- Iden3-era context (`SEED`, `did:air`) → explain it is left unchanged and point to the Iden3 docs; do not run setup helpers against it.
+- Issuer needing a backend → issue; backend installed but missing keys → keys; keys present but no DID → set a stable public HTTPS `ISSUER_ORIGIN`, then issuer-did.
 - Verifier or BYO login missing signing keys → keys, without an issuer backend.
 - Missing public JWKS/registration → register when the endpoint is ready, otherwise implement it in the selected app.
-- Registered issuer missing schema/program → schema; missing SDK/direct implementation → issue for the selected trigger.
-- Verifier missing program/integration → verify.
+- Registered issuer missing a credential spec, Dashboard schema, or program → schema; missing SDK/direct implementation → issue for the selected trigger.
+- Verifier missing program/integration, or a `verifyCredential` call without a backend presentation check → verify.
 - Account-only → account; agentic → agent.
 - Existing implementation → audit, then polish for the requested feature.
 

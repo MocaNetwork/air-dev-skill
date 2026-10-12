@@ -32,7 +32,7 @@ function usage(code = 2) {
 
 Options:
   --partner-id <uuid>      required unless --existing
-  --existing               partner already has SEED / keys / DID
+  --existing               partner already has signing keys / registered identity
   --auth air-login|byo     default: air-login
   --vertical <name>        loyalty|gaming|fintech|events|ads|agents|other
   --custom-auth            BYO auth (issuer/both only)
@@ -102,7 +102,8 @@ function main() {
   const issuerBackend = role === 'issuer' || role === 'both' ? 'air-issuer-service' : 'none';
   const notes = [
     'Init wrote sandbox defaults. Production is a separate partner / DID / program set.',
-    existing ? 'Existing partner: import current signing configuration; issuer roles also preserve the issuer SEED.' : '',
+    existing ? 'Existing partner: import current signing configuration and keep the registered ISSUER_ORIGIN host; it defines the did:web issuer DID.' : '',
+    issuer && db === 'none' ? 'No database: fine for sandbox; revocation, issuance history and the token status list need one.' : '',
     db === 'external' ? 'External database connection is stored in the gitignored root .env for the keys step.' : '',
   ].filter(Boolean).join(' ');
 
@@ -128,7 +129,16 @@ function main() {
     schemaIds: '',
     issueProgramIds: '',
     verifyProgramIds: '',
-    issuerActivated: 'no',
+    credentialFormat: issuer || role === 'verifier' ? 'SD_JWT_VC' : 'none',
+    issuerOrigin: '',
+    backendBranch: issuer ? 'main_sd-jwt-vc' : 'none',
+    backendCommit: '',
+    vcts: '',
+    trustedIssuers: '',
+    availableVcApiUrl: issuer ? 'pending — run issuer-did' : 'none',
+    issueVcApiUrl: issuer ? 'pending — run issuer-did' : 'none',
+    revocationStatusApiUrl: issuer ? 'pending — run issuer-did' : 'none',
+    issuerRegistered: 'no',
     jwksRegistered: 'no',
     domainWhitelisted: 'no',
     notes,

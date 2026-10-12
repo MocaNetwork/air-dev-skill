@@ -7,7 +7,7 @@ import { assertSandbox } from './lib/environment.mjs';
 import { UUID_RE, parseEnvFile, upsertEnv } from './lib/secrets.mjs';
 
 const ENVS = ['sandbox'];
-const PHASE2 = new Set(['createPartner', 'createIssuerDid', 'createApiKeys', 'createProgram', 'registerJwksUrl', 'activateIssuer']);
+const PHASE2 = new Set(['createPartner', 'createIssuerDid', 'createApiKeys', 'createProgram', 'registerJwksUrl', 'registerIssuer', 'activateIssuer']);
 
 function usage(code = 2) {
   process.stderr.write(`Usage: node provision.mjs --env sandbox <action> [options]
@@ -16,11 +16,15 @@ v1 actions:
   write-ids              update PARTNER.md IDs and public env (never secrets)
 
 Phase 2 stubs (throw):
-  createPartner createIssuerDid createApiKeys createProgram registerJwksUrl activateIssuer
+  createPartner createIssuerDid createApiKeys createProgram registerJwksUrl registerIssuer
 
 Options:
   --partner-id --issuer-did --verifier-did --jwks-url
   --issue-program-id --verify-program-id --schema-id
+  --vct <credential type>          registered SD-JWT credential type
+  --trusted-issuer <did:web:...>   issuer accepted by the backend presentation check
+  --issuer-registered yes|no       (alias: --activated) Dashboard Issuer → Settings saved
+  --jwks-registered yes|no --domain-whitelisted yes|no
   --project <dir>
 `);
   process.exit(code);
@@ -43,6 +47,9 @@ function writeIds(root, envName, flags) {
   if (flags['partner-id'] && !UUID_RE.test(flags['partner-id'])) throw new Error('Partner ID must be the Dashboard UUID.');
   if (flags['partner-id'] && partner.fields['Partner ID'] && flags['partner-id'] !== partner.fields['Partner ID']) throw new Error('Partner identity cannot be replaced; use a separate project.');
   if (flags['issuer-did'] && partner.fields['Issuer DID'] && flags['issuer-did'] !== partner.fields['Issuer DID']) throw new Error('Issuer DID cannot be replaced; investigate the identity mismatch.');
+  for (const flag of ['issuer-did', 'trusted-issuer']) {
+    if (flags[flag] && !/^did:web:[^\s]+$/.test(flags[flag])) throw new Error(`--${flag} must be a did:web DID. Iden3 (did:air) issuers are configured with the AIR team.`);
+  }
   if (flags['jwks-url']) {
     const url = new URL(flags['jwks-url']);
     if (url.protocol !== 'https:' || ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) throw new Error('JWKS URL must use public HTTPS.');
@@ -55,7 +62,10 @@ function writeIds(root, envName, flags) {
   if (flags['issue-program-id']) updates['Issuance program IDs'] = flags['issue-program-id'];
   if (flags['verify-program-id']) updates['Verification program IDs'] = flags['verify-program-id'];
   if (flags['schema-id']) updates['Schema IDs'] = flags['schema-id'];
-  for (const [flag, label] of [['activated', 'Issuer activated'], ['jwks-registered', 'JWKS registered'], ['domain-whitelisted', 'Domain whitelisted']]) {
+  if (flags.vct) updates['Credential types (vct)'] = flags.vct;
+  if (flags['trusted-issuer']) updates['Trusted issuers'] = flags['trusted-issuer'];
+  if (flags.activated && !flags['issuer-registered']) flags['issuer-registered'] = flags.activated;
+  for (const [flag, label] of [['issuer-registered', 'Issuer registered'], ['jwks-registered', 'JWKS registered'], ['domain-whitelisted', 'Domain whitelisted']]) {
     if (['yes', 'no'].includes(flags[flag])) updates[label] = flags[flag];
   }
 
@@ -70,7 +80,13 @@ function writeIds(root, envName, flags) {
   }
   if (after['Issuer DID']) publicEnv.NEXT_PUBLIC_ISSUER_DID = after['Issuer DID'];
   if (after['Issuance program IDs']) publicEnv.NEXT_PUBLIC_ISSUE_PROGRAM_ID = after['Issuance program IDs'];
-  if (after['Verification program IDs']) publicEnv.NEXT_PUBLIC_VERIFY_PROGRAM_ID = after['Verification program IDs'];
+  if (after['Verification program IDs']) {
+    publicEnv.NEXT_PUBLIC_VERIFY_PROGRAM_ID = after['Verification program IDs'];
+    publicEnv.AIR_VERIFY_PROGRAM_ID = after['Verification program IDs'];
+  }
+  // Server-side inputs of the SD-JWT presentation check. Public identifiers, not secrets.
+  if (flags['trusted-issuer']) publicEnv.AIR_TRUSTED_ISSUERS = after['Trusted issuers'];
+  if (flags.vct) publicEnv.AIR_EXPECTED_VCT = after['Credential types (vct)'];
   publicEnv.NEXT_PUBLIC_BUILD_ENV = 'sandbox';
 
   ensureGitignore(root, ['.env', '.env.local']);

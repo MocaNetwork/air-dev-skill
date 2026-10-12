@@ -4,7 +4,8 @@ import path from 'node:path';
 import { loadAir, loadPartner, needsIssuer, needsVerifier, presentId, roleOf } from './lib/partner.mjs';
 import { backendEnvPath, existingPartner, hasIssuerBackend, backendInstalled, webEnvPath } from './lib/layout.mjs';
 import { parseArgs, projectRoot, readText, rel, walkFiles } from './lib/project.mjs';
-import { parseEnvFile, secretPresence } from './lib/secrets.mjs';
+import { legacyIden3Keys, parseEnvFile, secretPresence } from './lib/secrets.mjs';
+import { isLegacyIden3Did } from './lib/did.mjs';
 
 const SOURCE_EXTS = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'];
 
@@ -18,9 +19,10 @@ export function collectSignals(root) {
   const role = roleOf(partner.fields);
   const files = walkFiles(root, { exts: SOURCE_EXTS });
   const envLocal = parseEnvFile(readText(webEnvPath(root)));
+  const backendEnv = parseEnvFile(readText(backendEnvPath(root)));
   const env = {
     ...parseEnvFile(readText(path.join(root, '.env'))),
-    ...parseEnvFile(readText(backendEnvPath(root))),
+    ...backendEnv,
     ...envLocal,
   };
   const secrets = secretPresence(env);
@@ -40,6 +42,9 @@ export function collectSignals(root) {
   const envSplitOk = !joined.some(({ text }) =>
     /NEXT_PUBLIC_(PARTNER_PRIVATE_KEY|SEED|API_KEY|ADMIN_API_KEY)/.test(text));
   const hasPartnerJwtRoute = joined.some(({ file, text }) => /partner-jwt/.test(file) && /export.*POST/.test(text));
+  const hasPresentationCheck = joined.some(({ text }) => /\bverifyAirSdJwt\s*\(|\bSDJwtVcInstance\b/.test(text));
+  const legacyIden3 = isLegacyIden3Did(partner.fields['Issuer DID'])
+    || (legacyIden3Keys(backendEnv).length > 0 && !backendEnv.PARTNER_JWKS);
 
   return {
     ok: true,
@@ -51,7 +56,9 @@ export function collectSignals(root) {
       partnerId: presentId(partner.fields, 'Partner ID'),
       issuerDid: presentId(partner.fields, 'Issuer DID'),
       jwksUrl: presentId(partner.fields, 'JWKS URL'),
-      issuerActivated: /^(yes|true|done)$/i.test(partner.fields['Issuer activated'] || ''),
+      issuerRegistered: /^(yes|true|done)$/i.test(partner.fields['Issuer registered'] || partner.fields['Issuer activated'] || ''),
+      issuerOriginPublic: /^https:\/\//.test(backendEnv.ISSUER_ORIGIN || '') && !/localhost|127\.0\.0\.1/.test(backendEnv.ISSUER_ORIGIN || ''),
+      legacyIden3,
       jwksRegistered: /^(yes|true|done)$/i.test(partner.fields['JWKS registered'] || ''),
       issuerBackend: partner.fields['Issuer backend'] || '',
       authModel: partner.fields['Auth model'] || air.fields.Model || '',
@@ -66,6 +73,7 @@ export function collectSignals(root) {
       hasIssueCall,
       hasVerifyCall,
       hasPartnerJwtRoute,
+      hasPresentationCheck,
       envSplitOk,
       hasIssuerBackend: hasIssuerBackend(root),
       backendInstalled: backendInstalled(root),
@@ -87,6 +95,9 @@ export function recommend(signals) {
   if (!signals.ok) return [{ cmd: '/air init', reason: 'No PARTNER.md — capture partner identity first.' }];
   const picks = [];
   const { partner, scan, needs } = signals;
+  if (partner.legacyIden3) {
+    return [{ cmd: '/air audit', reason: 'Iden3-era configuration (SEED or did:air) detected. The helpers target the SD-JWT issuer service and will not convert it; see https://docs.air3.com/products/identity/iden3/issuing or plan a separate did:web issuer.' }];
+  }
   if (needs.issuer && !partner.partnerId && !partner.existing) {
     picks.push({ cmd: '/air init', reason: 'Issuer role but Partner ID is missing. Paste it from the Dashboard.' });
   }
@@ -94,23 +105,26 @@ export function recommend(signals) {
     picks.push({ cmd: '/air issue', reason: 'Clone air-issuer-service before generating or importing keys.' });
   }
   if (needs.issuer && scan.hasIssuerBackend && !scan.backendInstalled) picks.push({ cmd: '/air issue', reason: 'Install dependencies in the existing issuer backend before configuring keys.' });
-  if (needs.issuer && scan.hasIssuerBackend && scan.backendInstalled && partner.existing && signals.secrets.missing.includes('SEED')) {
-    picks.push({ cmd: '/air keys --import', reason: 'Import the existing issuer configuration.' });
+  const hasSigningKey = !signals.secrets.missing.includes('PARTNER_PRIVATE_KEY_DER');
+  if (needs.issuer && scan.hasIssuerBackend && scan.backendInstalled && partner.existing && !hasSigningKey) {
+    picks.push({ cmd: '/air keys --import', reason: 'Import the existing partner signing configuration.' });
   }
-  if (needs.issuer && scan.hasIssuerBackend && scan.backendInstalled && !partner.existing && signals.secrets.missing.includes('SEED')) {
-    picks.push({ cmd: '/air keys', reason: 'Backend is cloned; generate the seed and partner keypair next.' });
+  if (needs.issuer && scan.hasIssuerBackend && scan.backendInstalled && !partner.existing && !hasSigningKey) {
+    picks.push({ cmd: '/air keys', reason: 'Backend is cloned; generate the partner keypair and issuer API keys next.' });
   }
-  if (needs.issuer && !signals.secrets.missing.includes('SEED') && !partner.issuerDid) {
-    picks.push({ cmd: '/air issuer-did', reason: 'Keys exist; extract the issuer DID from the backend repl.' });
+  if (needs.issuer && hasSigningKey && !partner.issuerDid) {
+    picks.push({ cmd: '/air issuer-did', reason: partner.issuerOriginPublic
+      ? 'Keys exist; derive and check the did:web issuer DID from ISSUER_ORIGIN.'
+      : 'Keys exist; set ISSUER_ORIGIN to the stable public HTTPS origin, then derive the did:web issuer DID.' });
   }
   if (needs.issuer && partner.issuerDid && !scan.hasJwksRoute && partner.frontend !== 'none') {
     picks.push({ cmd: '/air issue', reason: 'No JWKS route in the repo. Emit stubs after the frontend exists.' });
   }
-  if (needs.issuer && partner.issuerDid && !partner.issuerActivated) {
-    picks.push({ cmd: '/air register', reason: 'DID is known; issuer is not marked activated.' });
+  if (needs.issuer && partner.issuerDid && !partner.issuerRegistered) {
+    picks.push({ cmd: '/air register', reason: 'did:web issuer DID is known; issuer registration is not confirmed.' });
   }
-  if (needs.issuer && partner.issuerActivated && partner.issuanceTrigger !== 'direct' && partner.frontend !== 'none' && !scan.hasIssueCall) {
-    picks.push({ cmd: '/air issue', reason: 'Issuer is activated but there is no issue call yet.' });
+  if (needs.issuer && partner.issuerRegistered && partner.issuanceTrigger !== 'direct' && partner.frontend !== 'none' && !scan.hasIssueCall) {
+    picks.push({ cmd: '/air issue', reason: 'Issuer is registered but there is no issue call yet.' });
   }
   if (!needs.issuer && ['verifier', 'account-only'].includes(partner.role) && signals.secrets.missing.includes('PARTNER_PRIVATE_KEY_DER') && (needs.verifier || partner.authModel === 'byo')) {
     picks.push({ cmd: '/air keys', reason: 'Configure server signing keys for this app.' });
@@ -118,6 +132,9 @@ export function recommend(signals) {
   if ((needs.verifier || needs.issuer) && !partner.jwksRegistered) picks.push({ cmd: '/air register', reason: 'Public JWKS registration is not yet confirmed.' });
   if ((needs.verifier || scan.hasIssueCall) && !scan.hasVerifyCall && needs.verifier) {
     picks.push({ cmd: '/air verify', reason: 'Issue exists or role is verifier; verification is missing.' });
+  }
+  if (needs.verifier && scan.hasVerifyCall && !scan.hasPresentationCheck) {
+    picks.push({ cmd: '/air verify', reason: 'verifyCredential results are not checked on a backend; verify the SD-JWT presentation server-side.' });
   }
   if (scan.hasIssueCall || scan.hasVerifyCall || scan.hasJwksRoute) {
     picks.push({ cmd: '/air audit then /air polish', reason: 'Code is present — run detectors, then last-mile hardening.' });

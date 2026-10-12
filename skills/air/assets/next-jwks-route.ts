@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 
 export async function GET() {
-  const raw = process.env.SD_JWT_JWKS;
+  const raw = process.env.PARTNER_JWKS || process.env.SD_JWT_JWKS;
   if (!raw) {
-    return NextResponse.json({ error: "Missing SD_JWT_JWKS" }, { status: 500 });
+    return NextResponse.json({ error: "Missing PARTNER_JWKS" }, { status: 500 });
   }
 
   try {
@@ -13,9 +13,11 @@ export async function GET() {
       return NextResponse.json({ error: "Invalid public JWKS" }, { status: 500 });
     }
     return NextResponse.json(jwks, {
-      headers: { "Cache-Control": "public, max-age=3600" },
+      // Short cache while sandbox keys are being set up, so a replaced key is not stuck in
+      // AIR's cache. Raise it once the signing key is final.
+      headers: { "Cache-Control": "public, max-age=60" },
     });
   } catch {
-    return NextResponse.json({ error: "SD_JWT_JWKS is not valid JSON" }, { status: 500 });
+    return NextResponse.json({ error: "PARTNER_JWKS is not valid JSON" }, { status: 500 });
   }
 }

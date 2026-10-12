@@ -4,7 +4,9 @@ import { createPublicKey } from 'node:crypto';
 import { loadAir, loadPartner } from './lib/partner.mjs';
 import { backendEnvPath, webEnvPath } from './lib/layout.mjs';
 import { parseArgs, projectRoot, readText, rel, walkFiles } from './lib/project.mjs';
-import { parseEnvFile } from './lib/secrets.mjs';
+import { algFromDer, legacyIden3Keys, parseEnvFile, partnerJwks } from './lib/secrets.mjs';
+import { deriveIssuerDid, isLegacyIden3Did } from './lib/did.mjs';
+import { ISSUER_ENDPOINTS } from './lib/endpoints.mjs';
 
 export function detect(root) {
   const findings = [];
@@ -21,9 +23,27 @@ export function detect(root) {
     }
     if (env.ISSUER_ORIGIN && !env.ISSUER_ORIGIN.startsWith('https://')) add('P1', 'issuer-origin-not-https', name, 'Issuer origin is local or HTTP; use public HTTPS before issuing real credentials');
     if (env.NODE_ENV && env.NEXT_PUBLIC_BUILD_ENV && env.NODE_ENV.toLowerCase() !== env.NEXT_PUBLIC_BUILD_ENV.toLowerCase()) add('P0', 'network-mismatch', name, 'Backend and web environment settings differ');
-    if (env.SD_JWT_JWKS) {
+    if (env.PARTNER_PRIVATE_KEY_DER && env.PARTNER_PRIVATE_KEY_ALG) {
       try {
-        const document = JSON.parse(env.SD_JWT_JWKS);
+        if (algFromDer(env.PARTNER_PRIVATE_KEY_DER) !== env.PARTNER_PRIVATE_KEY_ALG) add('P0', 'signing-alg-mismatch', name, 'PARTNER_PRIVATE_KEY_ALG does not match the private key type');
+      } catch { add('P0', 'invalid-signing-key', name, 'PARTNER_PRIVATE_KEY_DER is not a supported PKCS#8 RSA or P-256 key'); }
+    }
+    if (legacyIden3Keys(env).length && !env.PARTNER_JWKS) add('P1', 'legacy-iden3-config', name, 'Iden3-era settings (SEED) found; the SD-JWT issuer service ignores them and uses did:web from ISSUER_ORIGIN');
+    if (env.ISSUER_ORIGIN && partner.fields['Issuer DID'] && !isLegacyIden3Did(partner.fields['Issuer DID'])) {
+      try {
+        if (deriveIssuerDid(env.ISSUER_ORIGIN) !== partner.fields['Issuer DID'].trim()) add('P0', 'issuer-did-origin-mismatch', name, 'ISSUER_ORIGIN host does not match the recorded did:web Issuer DID; changing the host changes issuer identity');
+      } catch { add('P0', 'issuer-origin-invalid', name, 'ISSUER_ORIGIN is not a valid URL'); }
+    }
+    if (env.ISSUER_ORIGIN) {
+      const base = `${env.ISSUER_ORIGIN.trim().replace(/\/+$/, '')}/`;
+      for (const { label } of ISSUER_ENDPOINTS) {
+        const recorded = partner.fields[label];
+        if (recorded && /^https?:\/\//.test(recorded) && !recorded.startsWith(base)) add('P0', 'issuer-endpoint-mismatch', 'PARTNER.md', `${label} is not under ISSUER_ORIGIN; update it here and in Dashboard → Issuer → Settings`);
+      }
+    }
+    if (partnerJwks(env)) {
+      try {
+        const document = JSON.parse(partnerJwks(env));
         if (!Array.isArray(document.keys) || !document.keys.length) throw new Error('Empty keys');
         for (const key of document.keys) {
           if (['d', 'p', 'q', 'dp', 'dq', 'qi'].some(field => field in key)) throw new Error('Private material');
@@ -41,6 +61,7 @@ export function detect(root) {
     } catch { add('P0', 'jwks-url-field', 'PARTNER.md', 'Recorded JWKS URL is not a valid public HTTPS URL'); }
   }
   if (/SANDBOX/i.test(air.fields.BUILD_ENV || '') && /mainnet/i.test(air.fields.credentialNetwork || '')) add('P0', 'air-md-network', 'AIR.md', 'AIR.md pairs SANDBOX with mainnet');
+  if (isLegacyIden3Did(partner.fields['Issuer DID'])) add('P1', 'legacy-iden3-did', 'PARTNER.md', 'Issuer DID is an Iden3 did:air identity; SD-JWT issuers use did:web. Do not replace a registered identity without a migration plan');
   // Source matches are review observations, not proof of runtime failure. Do not
   // correlate unrelated headers or identifiers across an entire file.
   const jwksKids = [], jwtKids = [];
@@ -54,8 +75,17 @@ export function detect(root) {
     }
     const subject = code.match(/credentialSubject\s*:\s*\{([^}]+)\}/)?.[1];
     if (subject && /\b(dob|dateOfBirth|ssn|fullName|email)\s*:/.test(subject)) add('P2', 'raw-pii-claim', file, 'Review whether the credential needs these personal fields or can use derived claims');
-    if (/new\s+(?:\w+\.)?SignJWT\(\{[^}]*partnerId[^}]*\}\)/.test(code) && /issueCredential\s*\(/.test(code) && !/scope\s*:\s*['"]issue['"]/.test(code)) add('P2', 'missing-issue-scope', file, 'Review token purpose: a signing example near issuance has no literal issue scope');
+    const signsPartnerJwt = /(?:new\s+(?:\w+\.)?SignJWT\(|\bjwt\.sign\(|\bsign\()\s*\{[^}]*\bpartnerId\b/.test(code);
+    if (signsPartnerJwt && /issueCredential\s*\(|initialize-user|dstorage\/vcs/.test(code) && !/scope['"]?\s*[:,]\s*['"]issue['"]/.test(code)) add('P2', 'missing-issue-scope', file, 'Partner JWT for issuance has no scope "issue"; issueCredential and direct issuance tokens need it');
     if (/setExpirationTime\(\s*60\s*\*\s*60\s*\)/.test(code)) add('P2', 'jwt-exp-too-long', file, 'Review expiry expression; setExpirationTime uses an absolute NumericDate for numbers');
+    for (const [, args] of code.matchAll(/\.\s*verifyCredential\s*\(\s*\{([\s\S]*?)\}\s*\)/g)) {
+      if (!/\bnonce\b/.test(args)) add('P2', 'verify-without-nonce', file, 'verifyCredential has no nonce; the SD-JWT presentation is a replayable bearer token without a key-binding JWT');
+      if (/\boffchain\s*:/.test(args)) add('P2', 'removed-offchain-option', file, 'offchain was removed from verifyCredential; the verification program sets the mode');
+    }
+    if (/\.\s*(zkProofs|disclosedData|transactionHash)\b/.test(code) && /verifyCredential/.test(code)) add('P2', 'deprecated-verification-fields', file, 'zkProofs, disclosedData and transactionHash are no longer populated; read verifiablePresentation and verify it on the backend');
+    const issueArgs = code.match(/\.\s*issueCredential\s*\(\s*\{([\s\S]*?)\}\s*\)/)?.[1];
+    if (issueArgs && /credentialSubject\s*:\s*\{\s*[^}\s]/.test(issueArgs)) add('P2', 'client-credential-subject', file, 'Pass {} as credentialSubject; the issuer backend supplies authoritative claims');
+    if (/enableCors\s*\(\s*\{[\s\S]*?origin\s*:/.test(code) && !/air3\.com/.test(code)) add('P2', 'cors-excludes-air', file, 'Issuer CORS allowlist must include *.air3.com or the holder claim flow breaks');
     const literalKid = code.match(/kid:\s*['"]([^'"]+)['"]/)?.[1];
     if (literalKid && /jwks/i.test(file)) jwksKids.push(literalKid);
     if (literalKid && /setProtectedHeader/.test(code)) jwtKids.push({ file, kid: literalKid });

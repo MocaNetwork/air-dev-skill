@@ -4,17 +4,21 @@ Automated writes in this skill support sandbox only. `--env production` is rejec
 
 ## Sandbox
 
-- Dashboard: https://developers.sandbox.air3.com/
-- AIR Kit uses `BUILD_ENV.SANDBOX`; confirm the installed version's network options.
-- Bundled backend configuration uses `NODE_ENV=sandbox`; inspect the checked-out backend for exact origins and supported variables.
+- Dashboard: https://developers.sandbox.air3.com/dashboard
+- AIR Kit: `BUILD_ENV.SANDBOX` (Moca Chain testnet); confirm the installed version's options.
+- Issuer backend: `NODE_ENV=sandbox`; `AIR_API_ORIGIN` and `MOCA_CHAIN_API_ORIGIN` default per `NODE_ENV`.
+- AIR APIs: `initialize-user` at `https://air.api.sandbox.air3.com`, dStorage at `https://api.sandbox.mocachain.org/v1`.
 - Generated IDs and keys remain tied to this integration.
 
-## Mainnet
+## Production (mainnet)
 
-Use a separate project/configuration and the current official development-environments and registration documentation, discovered from https://docs.air3.com/llms.txt. Confirm mainnet access, the installed SDK's production enum/network options, and the real Dashboard origin. Do not guess a production host.
+Moca Chain mainnet is live and production is self-serve for SD-JWT issuers and verifiers. Iden3 in production requires the AIR team.
 
-The documented AIR API bases are `https://api.sandbox.mocachain.org/v1` for sandbox and `https://mocachain-mainnet.api.air3.com/v1` for production. In the SDK, the network values are `testnet` and `mainnet`; verify the installed package before writing configuration.
+- Dashboard: https://developers.air3.com/dashboard, a separate partner with its own Partner ID, issuer registration, credential types, programs, JWKS, and domains.
+- AIR Kit: `init({ buildEnv: BUILD_ENV.PRODUCTION, credentialNetwork: "mainnet" })`. `credentialNetwork` (`"testnet"` | `"mainnet"`) is accepted only with `BUILD_ENV.PRODUCTION`; verify the installed package before writing configuration.
+- AIR APIs: `initialize-user` at `https://air.api.air3.com`, dStorage at `https://mocachain-mainnet.api.air3.com/v1`.
+- Issuer: a production `ISSUER_ORIGIN` on a custom domain you control; it defines the production `did:web` issuer DID.
 
-The assistant may implement a user-requested mainnet integration through targeted, reviewed configuration based on those sources, but must not invoke sandbox setup helpers against it. Record actual network, identity, SDK version, backend version and endpoints in separate context. Obtain mainnet IDs, issuer keys, programs and activation for that environment; never copy/relabel sandbox identity as production.
+The assistant may implement a user-requested production integration through targeted, reviewed configuration based on https://docs.air3.com/get-started/environments/about, but must not invoke sandbox setup helpers against it. Record actual network, identity, SDK version, backend commit, and endpoints in separate context. Generate production keys and API keys for that environment; never copy or relabel sandbox identity as production.
 
-Do not treat an approval already granted by the user as missing. AIR account access/activation and authorization to edit local code are separate requirements.
+Do not treat an approval already granted by the user as missing. AIR account access and authorization to edit local code are separate requirements.

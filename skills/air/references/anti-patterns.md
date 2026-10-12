@@ -2,20 +2,29 @@
 
 Never do these. `detect.mjs` catches a subset.
 
-- Generate a new `SEED` after the DID is registered
+- Change the `ISSUER_ORIGIN` host after issuing real credentials; it is the `did:web` issuer identity
+- Rotate partner signing keys or regenerate configuration for a registered issuer
+- Replace or "migrate" an existing Iden3 (`did:air`, `SEED`) identity without an explicit plan with the AIR team
 - Put Partner JWT signing in the browser or under `NEXT_PUBLIC_*`
-- Reuse one JWT across users or across issue + verify without the right scope
-- Assume Testnet credentials exist on mainnet
+- Reuse one JWT across users or across issue + verify, or omit `scope: "issue"` from issuance tokens
+- Assume Testnet credentials exist on mainnet, or sandbox registration carries to production
 - Call Privy directly for agentic wallets
 - Store raw PII in `credentialSubject` when a boolean / enum works
-- Skip JWKS because login already works
-- Invent Partner ID, schema ID, program ID, issuer DID, or API origins
-- Set `credentialSubject.id` in a schema class
+- Return reserved claims (`id`, `iss`, `sub`, `vct`, `cnf`, `exp`, `iat`, `nonce`, `status`) from schema code or `/admin/issue-vc`
+- Sign claim values supplied by the browser; pass `credentialSubject: {}` to `issueCredential`
+- Skip JWKS because login already works, or point the JWKS URL at the issuer's `did.json`
+- Invent Partner ID, schema ID, `vct`, program ID, issuer DID, or API origins
 - Use a JDBC `DATABASE_URL`
 - Leave `ISSUER_ORIGIN` on localhost after a real claim
 - Mix sandbox configuration with another network
-- Send `x-api-key` to AIR / Moca chain APIs, or `x-partner-auth` to `/available-vc`
-- Route direct backend issuance through issuer-hosted `/issue-vc`; direct issuance uses AIR `initialize-user` and `dstorage/vcs`
+- Send `x-api-key` to AIR / Moca chain APIs, `x-partner-auth` to issuer `/available-vc`, or call `/admin/*` from a browser
+- Route direct backend issuance through the AIR-facing `/issue-vc`; use `/admin/issue-vc` or the documented AIR calls
+- Restrict issuer CORS so that `*.air3.com` is excluded
+- Change the token status list partition size after issuing
+- Edit published Type Metadata or reuse a vct URL for different claims; bump the version instead
+- Leave VCT JSON empty in the Dashboard; verifiers then have no claims to pick
+- Act on a browser-side `Compliant` result, or trust the presentation wrapper's `holder`, without backend SD-JWT verification
+- Call `verifyCredential` without a backend nonce, reuse a nonce, or accept a missing KB-JWT after sending one
 - Change the verified backend wire contract or holder encryption to work around an integration error
 - Commit `.env` / `.env.local`
-- Print `SEED`, `API_KEY`, `ADMIN_API_KEY`, or private keys in chat
+- Print `PARTNER_PRIVATE_KEY_DER`, `API_KEY`, `ADMIN_API_KEY`, or other private keys in chat

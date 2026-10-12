@@ -1,13 +1,15 @@
 # Partner
 
-<!-- air:partner-schema 1 -->
+<!-- air:partner-schema 2 -->
 
 ## Identity
 
 - Partner ID: {{partnerId}}
 - Issuer DID: {{issuerDid}}
+- Issuer origin: {{issuerOrigin}}
 - Verifier DID: {{verifierDid}}
 - Role: {{role}}
+- Credential format: {{credentialFormat}}
 - Existing partner: {{existingPartner}}
 - Auth model: {{authModel}}
 - Vertical: {{vertical}}
@@ -16,8 +18,18 @@
 - Database: {{database}}
 - Frontend: {{frontend}}
 - Backend directory: {{backendDirectory}}
+- Backend branch: {{backendBranch}}
+- Backend commit: {{backendCommit}}
 - Web directory: {{webDirectory}}
 - Issuance trigger: {{issuanceTrigger}}
+
+## Issuer endpoints
+
+Registered in Dashboard → Issuer → Settings. Written by `issuer-did.mjs` from `ISSUER_ORIGIN` and the backend routes.
+
+- Available Credentials API: {{availableVcApiUrl}}
+- Issue Credential API: {{issueVcApiUrl}}
+- Revocation Status API: {{revocationStatusApiUrl}}
 
 ## Keys
 
@@ -29,12 +41,14 @@
 ## Programs
 
 - Schema IDs: {{schemaIds}}
+- Credential types (vct): {{vcts}}
 - Issuance program IDs: {{issueProgramIds}}
 - Verification program IDs: {{verifyProgramIds}}
+- Trusted issuers: {{trustedIssuers}}
 
-## Activation
+## Registration
 
-- Issuer activated: {{issuerActivated}}
+- Issuer registered: {{issuerRegistered}}
 - JWKS registered: {{jwksRegistered}}
 - Domain whitelisted: {{domainWhitelisted}}
 

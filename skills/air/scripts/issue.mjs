@@ -8,11 +8,22 @@ import { assertSandbox } from './lib/environment.mjs';
 import { parseArgs, projectRoot } from './lib/project.mjs';
 
 const REPO = 'https://github.com/MocaNetwork/air-issuer-service.git';
+// SD-JWT VC reference implementation. Iden3 issuers use a different branch that the AIR team enables.
+export const BRANCH = 'main_sd-jwt-vc';
+
+export function cloneArgs(dest) {
+  return ['clone', '--depth', '1', '--branch', BRANCH, REPO, dest];
+}
+
+function backendCommit(dest) {
+  const result = spawnSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: dest, encoding: 'utf8' });
+  return result.status === 0 ? result.stdout.trim() : undefined;
+}
 
 function usage(code = 2) {
   process.stderr.write(`Usage: node issue.mjs [--clone-backend] [--yes] [--install] [--dir apps/backend] [--project <dir>]
 
-Dry-run prints the issuer scaffold plan. --clone-backend --yes clones air-issuer-service.
+Dry-run prints the issuer scaffold plan. --clone-backend --yes clones air-issuer-service@${BRANCH}.
 --install runs pnpm install in the clone.
 `);
   process.exit(code);
@@ -42,7 +53,11 @@ function main() {
   process.stdout.write(`  Database: ${partner.fields.Database || 'none'}\n`);
   process.stdout.write(`  Frontend: ${frontend}\n`);
   process.stdout.write(`  Backend dest: ${dest}\n`);
-  process.stdout.write(`  Clone: git clone --depth 1 ${REPO} ${dest}\n`);
+  process.stdout.write(`  Clone: git ${cloneArgs(dest).join(' ')}\n`);
+  process.stdout.write(`  Credential format: SD_JWT_VC (issuer DID = did:web:<host of ISSUER_ORIGIN>)\n`);
+  if (['direct', 'both'].includes(partner.fields['Issuance trigger'])) {
+    process.stdout.write(`  Direct issuance: your servers call POST {ISSUER_ORIGIN}/admin/issue-vc with x-admin-api-key\n`);
+  }
   process.stdout.write(`  Install: pnpm install (in ${dest})\n`);
   if (wantsFrontend(partner.fields) && partner.fields['Issuance trigger'] !== 'direct') {
     process.stdout.write(`  Frontend: ${frontend === 'next' ? 'create-next-app or' : ''} existing app + skill JWKS/JWT stubs + AirService.issueCredential\n`);
@@ -50,7 +65,7 @@ function main() {
     process.stdout.write(`  Frontend: skipped (Frontend: none)\n`);
   }
 
-  process.stdout.write(`  Custom-auth: ${partner.fields['Custom auth'] === 'yes' ? 'opt-in — docs /recipes/custom-auth-integration' : 'no — use AIR Kit login'}\n`);
+  process.stdout.write(`  Custom-auth: ${partner.fields['Custom auth'] === 'yes' ? 'opt-in — docs /get-started/authentication/custom-auth' : 'no — use AIR Kit login'}\n`);
 
 
   if (!flags['clone-backend'] && flags.install) {
@@ -74,15 +89,20 @@ function main() {
   }
   assertSandbox(root);
   fs.mkdirSync(path.dirname(dest), { recursive: true });
-  const result = spawnSync('git', ['clone', '--depth', '1', REPO, dest], { stdio: 'inherit' });
+  const result = spawnSync('git', cloneArgs(dest), { stdio: 'inherit' });
   if ((result.status ?? 1) !== 0) {
     process.exit(result.status ?? 1);
   }
-  updatePartnerFields(root, { 'Backend directory': path.relative(root, dest) || '.' });
+  updatePartnerFields(root, {
+    'Backend directory': path.relative(root, dest) || '.',
+    'Backend branch': BRANCH,
+    'Backend commit': backendCommit(dest),
+  });
   if (flags.install) {
     const install = spawnSync('pnpm', ['install'], { cwd: dest, stdio: 'inherit' });
     process.exit(install.status ?? 1);
   }
 }
 
-try { main(); } catch (error) { console.error(error.message); process.exitCode = 2; }
+const invoked = process.argv[1] && path.basename(process.argv[1]) === 'issue.mjs';
+if (invoked) { try { main(); } catch (error) { console.error(error.message); process.exitCode = 2; } }

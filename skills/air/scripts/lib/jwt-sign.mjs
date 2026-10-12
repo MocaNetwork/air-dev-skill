@@ -7,6 +7,7 @@ export function signPartnerToken(env, { operation, user, expiresIn = 300, now = 
   const config = importPartnerEnv({ ...env, PARTNER_ID: env.PARTNER_ID || env.NEXT_PUBLIC_PARTNER_ID }, { issuer: false });
   const alg = JSON.parse(jwksFromDer(config.PARTNER_PRIVATE_KEY_DER, config.PARTNER_PRIVATE_KEY_KID)).keys[0].alg;
   const claims = { partnerId: config.PARTNER_ID, iat: now, exp: now + expiresIn };
+  // Issuance tokens carry scope "issue", verification tokens scope "verify"; only login tokens carry email.
   if (operation === 'login') {
     if (!user?.email) throw new Error('Custom login requires an authenticated user email.');
     claims.email = user.email;

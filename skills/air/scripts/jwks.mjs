@@ -8,7 +8,7 @@ import { ASSETS, parseArgs, projectRoot, writeText } from './lib/project.mjs';
 
 function usage(code = 2) {
   process.stderr.write(`Usage:
-  node jwks.mjs emit [--target <project>] [--route <relpath>]
+  node jwks.mjs emit [--target <project>] [--route <relpath>] [--jwt-route <relpath>] [--verify-route <relpath>]
   node jwks.mjs --check <url>
 `);
   process.exit(code);
@@ -21,6 +21,7 @@ function defaultRoutes(target) {
   return {
     jwks: path.join(base, '.well-known', 'jwks', 'route.ts'),
     jwt: path.join(base, 'partner-jwt', 'route.ts'),
+    verify: path.join(base, 'air', 'verify-presentation', 'route.ts'),
   };
 }
 
@@ -79,17 +80,34 @@ function emit(flags) {
   if (needsIssuer(role)) operations.push('issue');
   if (needsVerifier(role)) operations.push('verify');
   if (partner.fields['Custom auth'] === 'yes') operations.push('login');
+  // Next 16 with cacheComponents rejects route segment config such as `export const runtime`.
+  const nextConfig = ['next.config.ts', 'next.config.mjs', 'next.config.js'].map(name => fs.existsSync(path.join(root, name)) ? fs.readFileSync(path.join(root, name), 'utf8') : '').join('\n');
+  const cacheComponents = /cacheComponents\s*:\s*true/.test(nextConfig);
+  const route = text => (cacheComponents ? text.replace(/^export const runtime = "nodejs";\n/m, '') : text);
+  const tokenOperations = operations.filter(operation => operation !== 'login');
   const files = [
     [dest, fs.readFileSync(path.join(ASSETS, 'next-jwks-route.ts'), 'utf8')],
-    [jwtDest, fs.readFileSync(path.join(ASSETS, 'next-partner-jwt-route.ts'), 'utf8').replace('/* AIR_ALLOWED_OPERATIONS */', operations.map(value => JSON.stringify(value)).join(', '))],
-    [authDest, fs.readFileSync(path.join(ASSETS, 'air-token-auth.ts'), 'utf8')],
+    [jwtDest, route(fs.readFileSync(path.join(ASSETS, 'next-partner-jwt-route.ts'), 'utf8').replace('/* AIR_ALLOWED_OPERATIONS */', operations.map(value => JSON.stringify(value)).join(', ')))],
+    [authDest, fs.readFileSync(path.join(ASSETS, 'air-token-auth.ts'), 'utf8').replace('/* AIR_TOKEN_OPERATIONS */', tokenOperations.map(value => JSON.stringify(value)).join(', '))],
   ];
+  if (needsVerifier(role)) {
+    // Backend check of the SD-JWT presentation; the browser's Compliant status is not trusted on its own.
+    const verifyDest = path.resolve(root, flags['verify-route'] || defaults.verify);
+    let authImport = path.relative(path.dirname(verifyDest), authDest).replace(/\\/g, '/').replace(/\.ts$/, '');
+    if (!authImport.startsWith('.')) authImport = `./${authImport}`;
+    files.push(
+      [verifyDest, route(fs.readFileSync(path.join(ASSETS, 'next-verify-presentation-route.ts'), 'utf8').replace('AIR_TOKEN_AUTH_IMPORT', authImport))],
+      [path.join(path.dirname(verifyDest), 'verify-air-sd-jwt.ts'), fs.readFileSync(path.join(ASSETS, 'verify-air-sd-jwt.ts'), 'utf8')],
+    );
+  }
   for (const [file, contents] of files) {
     if (fs.existsSync(file)) console.log(`Preserved ${file}`);
     else { writeText(file, contents); console.log(`Wrote ${file}`); }
   }
   updatePartnerFields(project, { 'Web directory': path.relative(project, root) || '.' });
-  console.log('Connect air-token-auth.ts to verified authentication and authorization, then test anonymous and authorized requests before exposing the app.');
+  console.log('air-token-auth.ts validates the AIR login token (Authorization: Bearer from getAccessToken()); install jose in the web app. For Custom Auth, replace it with the app session. Test anonymous, cross-site and authorized requests before exposing the app.');
+  if (cacheComponents) console.log('cacheComponents is enabled: the routes were written without `export const runtime`.');
+  if (needsVerifier(role)) console.log('Verification: install @sd-jwt/sd-jwt-vc@^0.20 and jose@^5 in the web app, implement the nonce store in air-token-auth.ts, and set AIR_VERIFY_PROGRAM_ID, AIR_TRUSTED_ISSUERS and AIR_EXPECTED_VCT (provision.mjs write-ids records them).');
 }
 
 async function main() {
