@@ -22,7 +22,7 @@ One Partner ID maps to one registered JWKS URL. When issuer and verifier capabil
 
 Credential menus (schemas, programs, DID settings) stay hidden until an issuer DID is registered. In **Issuer → Settings** of the target environment's Dashboard:
 
-- Issuer DID: the recorded `did:web:…`, which must equal the `id` served at `${ISSUER_ORIGIN}/.well-known/did.json` (`issuer-did.mjs --check`)
+- did:web Host: the host printed by `issuer-did.mjs` (`issuer.example.com`, or `issuer.example.com%3A8443` when `ISSUER_ORIGIN` has a non-default port). Give the user that string verbatim. The recorded Issuer DID stays `did:web:<that host>` and must equal the `id` at `${ISSUER_ORIGIN}/.well-known/did.json` (`issuer-did.mjs --check`)
 - Issuer API key: the backend `API_KEY`; AIR sends it as `x-api-key`
 - Supported signature type: `SD_JWT_VC`
 - JWKS URL for the partner keys

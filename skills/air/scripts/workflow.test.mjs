@@ -74,6 +74,19 @@ test('SDK issuer writes keys and program IDs to planned web directory before sca
   assert.equal(collectSignals(root).scan.hasJwksRoute, true);
 });
 
+test('provision refuses to overwrite a partner ID changed in an env file', t => {
+  const root = workspace(t); init(root, 'issuer', ['--frontend', 'next']); backend(root); run(root, 'keys', ['--env', 'sandbox']);
+  const changed = '22222222-2222-4222-8222-222222222222';
+  const backendEnv = path.join(root, 'apps/backend/.env');
+  fs.writeFileSync(backendEnv, upsertEnv(fs.readFileSync(backendEnv, 'utf8'), { PARTNER_ID: changed }));
+  const webBefore = fs.readFileSync(path.join(root, 'apps/web/.env.local'), 'utf8');
+  const result = run(root, 'provision', ['--env', 'sandbox', 'write-ids', '--issue-program-id', 'p-1'], false);
+  assert.match(result.stderr, /Partner ID mismatch/);
+  assert.match(result.stderr, new RegExp(`PARTNER_ID=${changed}`));
+  assert.equal(fs.readFileSync(path.join(root, 'apps/web/.env.local'), 'utf8'), webBefore);
+  assert.equal(loadPartner(root).fields['Issuance program IDs'] || '', '');
+});
+
 test('verifier flow creates signing keys, scopes tokens and records registration without issuer secrets', t => {
   const root = workspace(t); init(root, 'verifier', ['--frontend', 'next']);
   run(root, 'keys', ['--env', 'sandbox']);

@@ -18,6 +18,7 @@ const aliases = {
   verify: 'verify.mjs',
   'issuer-did': 'issuer-did.mjs',
   vct: 'vct.mjs',
+  'sd-jwt': 'sd-jwt.mjs',
 };
 
 const installCmds = new Set(['install', 'update', 'uninstall', 'list']);
@@ -46,6 +47,7 @@ Commands:
   provision --env sandbox <action>
   issue [--clone-backend] [--yes] [--install]
   verify [--check]
+  sd-jwt inspect <file|-> [--verify] [--nonce <n>] [--program-id <id>] [--vct <vct>] [--did-doc <file|url>]
 
 Also:
   npx skills add MocaNetwork/air-sdk-ai

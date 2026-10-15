@@ -69,6 +69,21 @@ function writeIds(root, envName, flags) {
     if (['yes', 'no'].includes(flags[flag])) updates[label] = flags[flag];
   }
 
+  // Never overwrite a partner ID the user changed in an env file: stop and name the mismatch.
+  const recordedPartner = updates['Partner ID'] || partner.fields['Partner ID'];
+  if (recordedPartner) {
+    const sources = [
+      [path.relative(root, envFile), parseEnvFile(readText(envFile)), ['PARTNER_ID', 'NEXT_PUBLIC_PARTNER_ID']],
+      [path.relative(root, backendEnvPath(root)), parseEnvFile(readText(backendEnvPath(root))), ['PARTNER_ID']],
+    ];
+    const mismatches = sources.flatMap(([file, env, keys]) => keys
+      .filter(key => env[key] && env[key] !== recordedPartner)
+      .map(key => `${file} ${key}=${env[key]}`));
+    if (mismatches.length) {
+      throw new Error(`Partner ID mismatch: PARTNER.md has ${recordedPartner}, but\n  ${mismatches.join('\n  ')}\nNothing was written. If the partner changed, set the same Partner ID in PARTNER.md and every env file, then rerun; otherwise restore the env files.`);
+    }
+  }
+
   if (Object.keys(updates).length) updatePartnerFields(root, updates);
 
   const publicEnv = {};

@@ -71,6 +71,7 @@ node <skill-base-dir>/scripts/vct.mjs schema --spec air/credentials/<name>.json 
 node <skill-base-dir>/scripts/jwks.mjs emit --target <web-root>
 node <skill-base-dir>/scripts/jwt.mjs --operation verify
 node <skill-base-dir>/scripts/jwks.mjs --check <actual-public-jwks-url>
+node <skill-base-dir>/scripts/sd-jwt.mjs inspect air/tmp/presentation.json --verify --nonce <nonce> --program-id <id>
 node <skill-base-dir>/scripts/provision.mjs --env sandbox write-ids --verify-program-id <actual-id> --trusted-issuer <did:web:...> --vct <type>
 node <skill-base-dir>/scripts/detect.mjs --json
 ```

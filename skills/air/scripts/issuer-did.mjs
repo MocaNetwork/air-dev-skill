@@ -48,6 +48,10 @@ async function main() {
     throw new Error('--issuer-origin differs from the backend ISSUER_ORIGIN. Update the backend configuration first.');
   }
   const did = deriveIssuerDid(origin);
+  process.stdout.write(`Issuer DID: ${did}\n`);
+  process.stdout.write(`Dashboard → Issuer → Settings → did:web Host: ${didWebHost}\n`);
+  process.stdout.write('Enter that host in did:web Host. The field accepts a hostname and rejects a did:web: value.\n');
+  process.stdout.write('Dashboard → Issuer → Settings:\n');
 
   const rehost = Boolean(recorded && recorded !== did);
   if (rehost && !flags.rehost) {
@@ -88,8 +92,12 @@ async function main() {
     written.push(envFile);
   }
 
+  const didWebHost = did.slice('did:web:'.length);
   process.stdout.write(`Issuer DID: ${did}\n`);
+  process.stdout.write(`Dashboard → Issuer → Settings → did:web Host: ${didWebHost}\n`);
+  process.stdout.write('Enter that host in did:web Host.\n');
   process.stdout.write('Dashboard → Issuer → Settings:\n');
+
   for (const endpoint of endpoints) {
     process.stdout.write(`  ${endpoint.label} (${endpoint.field}): ${endpoint.url}${endpoint.verified ? '' : '  (route not found in backend source; confirm it)'}\n`);
   }
@@ -97,7 +105,7 @@ async function main() {
   if (!flags.check) process.stdout.write('Run with --check once the backend is reachable to confirm /.well-known/did.json.\n');
   if (rehost) {
     process.stdout.write(`\nRehosted from ${recorded}. Issuer registration is now unconfirmed. Update together:\n`);
-    process.stdout.write('  - Dashboard → Issuer → Settings: the new Issuer DID and the three URLs above\n');
+    process.stdout.write(`  - Dashboard → Issuer → Settings: set did:web Host to ${didWebHost} and replace the three URLs above\n`);
     process.stdout.write('  - Credential types hosted on the issuer origin: vct.mjs plan --replace, then vct.mjs schema --rehost, then register the new VCT in the Dashboard\n');
     process.stdout.write('  - If the web host changed too: provision.mjs write-ids --jwks-url <new> --jwks-registered no --domain-whitelisted no, then update the Dashboard JWKS URL and domain\n');
   }
