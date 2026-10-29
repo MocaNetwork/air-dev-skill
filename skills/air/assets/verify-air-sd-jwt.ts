@@ -47,7 +47,7 @@ export type VerifyAirSdJwtInput = {
 const ENVELOPE_PREFIXES = ["data:application/dc+sd-jwt,", "data:application/vc+sd-jwt,"];
 
 export function extractCompactSdJwt(vp: VerifyAirSdJwtInput["verifiablePresentation"]): string {
-  // Docs: an EnvelopedVerifiableCredential whose id is a data: URL. AIR Kit 1.12 types: the
+  // Docs: an EnvelopedVerifiableCredential whose id is a data: URL. AIR Kit 1.13 types: the
   // compact SD-JWT string itself. Accept both.
   const entry = vp.verifiableCredential?.[0];
   const id = typeof entry === "string" ? entry : entry?.id;
