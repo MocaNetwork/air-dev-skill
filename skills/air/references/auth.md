@@ -22,6 +22,14 @@ Use `kid`, `alg`, and `typ: "JWT"` headers. Five-minute expiry is recommended; t
 
 The issuer backend uses `PARTNER_PRIVATE_KEY_DER` (PKCS#8 base64), `PARTNER_PRIVATE_KEY_KID`, `PARTNER_PRIVATE_KEY_ALG`, `PARTNER_ID`, and public `PARTNER_JWKS`. The same key also signs its SD-JWT credentials and is published in its `did:web` document, so rotating it is an issuer key change, not just a JWT change. The web server uses the same names except `PARTNER_PRIVATE_KEY_ALG`. Never expose private material through `NEXT_PUBLIC_*`. Imported JWKS must match the actual private key and contain public material only. `SD_JWT_JWKS` is accepted as a fallback name.
 
+### Key rotation
+
+The helpers never rotate. Rotate only when the user explicitly asks, and never by replacing the key in place:
+
+- Partner JWT key: publish the new public key in the registered JWKS alongside the old one, switch signing to the new `kid`, then remove the old key once outstanding JWTs (minutes) have expired.
+- Issuer signing key (the same key in the reference service): add the new key to the JWKS **and** the `did:web` document first, and keep the old key published while any credential it signed is unexpired, because those credentials' `kid` points at it. Check whether the checked-out backend can publish more than one key before starting; if it cannot, report that rather than rotating.
+- The issuer host is not rotatable: it is the DID.
+
 The holder's key-binding JWT is separate: it is signed by the holder's AIR Account key (ES256) and checked against the credential's `cnf.jwk`, not against partner JWKS.
 
 AIR Kit 1.11+ removed `AirUserDetails.partnerUserId`. Do not add, trust, or document a `partnerUserId` claim; keep any partner application's user ID in its own database, keyed to the AIR user UUID.

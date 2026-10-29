@@ -3,13 +3,17 @@
 Never do these. `detect.mjs` catches a subset.
 
 - Change the `ISSUER_ORIGIN` host after issuing real credentials; it is the `did:web` issuer identity
-- Rotate partner signing keys or regenerate configuration for a registered issuer
+- Rotate partner signing keys or regenerate configuration for a registered issuer unprompted, or by swapping the key in place; rotation is an explicit user request done with overlap (see [auth.md](auth.md#key-rotation))
 - Replace or "migrate" an existing Iden3 (`did:air`, `SEED`) identity without an explicit plan with the AIR team
 - Put Partner JWT signing in the browser or under `NEXT_PUBLIC_*`
 - Reuse one JWT across users or across issue + verify, or omit `scope: "issue"` from issuance tokens
 - Assume Testnet credentials exist on mainnet, or sandbox registration carries to production
 - Call Privy directly for agentic wallets
+- Bind agent scopes the user did not approve on the partner's own consent screen, or keep `agentApiKey` / agent JWTs anywhere but the agent backend
 - Store raw PII in `credentialSubject` when a boolean / enum works
+- Branch on `err.name` or show `err.message` to users with AIR Kit 1.13+; use `AirKitError` `code` with a `category` fallback
+- Generate a new dStorage `externalId` per retry, or reuse one for different content
+- Treat a revocation status that could not be fetched as "not revoked"
 - Return reserved claims (`id`, `iss`, `sub`, `vct`, `cnf`, `exp`, `iat`, `nonce`, `status`) from schema code or `/admin/issue-vc`
 - Sign claim values supplied by the browser; pass `credentialSubject: {}` to `issueCredential`
 - Skip JWKS because login already works, or point the JWKS URL at the issuer's `did.json`

@@ -66,7 +66,9 @@ Register only the real schema. Once it is registered, remove the bundled sample 
 
 ## 4. Issuance program
 
-Create and publish an issuance program under **Issuer → Programs** with that schema record and the `SD_JWT_VC` proof type. Record the program ID separately; the SDK's `credentialId` is the issuance program ID, while the backend works with `schemaId`. Iden3 schemas (JSON-LD contexts, Schema Builder) apply only to AIR-enabled Iden3 accounts.
+Create and publish an issuance program under **Issuer → Programs** with that schema record and the `SD_JWT_VC` proof type. If verifiers should receive any claim values, expand **Advanced set up** and turn on **Allow data disclosure**, then save. Without it, `fieldsToDisclose` is ignored: verification still returns `Compliant`, but the presentation carries no disclosed claims, so a backend that requires claims rejects every presentation. Tell the user to set it; do not assume it is on.
+
+Record the program ID separately; the SDK's `credentialId` is the issuance program ID, while the backend works with `schemaId`. Iden3 schemas (JSON-LD contexts, Schema Builder) apply only to AIR-enabled Iden3 accounts.
 
 ```bash
 node <skill-base-dir>/scripts/provision.mjs --env sandbox write-ids --issue-program-id <id>

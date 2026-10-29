@@ -15,7 +15,8 @@ function usage(code = 2) {
 
 Derives the did:web issuer DID and the Dashboard endpoint URLs (Available Credentials API,
 Issue Credential API, Revocation Status API) from the backend ISSUER_ORIGIN and records them in PARTNER.md.
---check fetches <ISSUER_ORIGIN>/.well-known/did.json, confirms its id and signing kid, and probes the endpoints.
+--check fetches <ISSUER_ORIGIN>/.well-known/did.json, confirms its id and signing kid, confirms
+/.well-known/air-partner-info returns the backend PARTNER_ID, and probes the endpoints.
 --rehost accepts a new issuer host (sandbox, after a dead tunnel): a new did:web and endpoint URLs, and
 issuer registration is marked unconfirmed until the Dashboard is updated.
 Never prints private keys or API keys.
@@ -48,10 +49,6 @@ async function main() {
     throw new Error('--issuer-origin differs from the backend ISSUER_ORIGIN. Update the backend configuration first.');
   }
   const did = deriveIssuerDid(origin);
-  process.stdout.write(`Issuer DID: ${did}\n`);
-  process.stdout.write(`Dashboard → Issuer → Settings → did:web Host: ${didWebHost}\n`);
-  process.stdout.write('Enter that host in did:web Host. The field accepts a hostname and rejects a did:web: value.\n');
-  process.stdout.write('Dashboard → Issuer → Settings:\n');
 
   const rehost = Boolean(recorded && recorded !== did);
   if (rehost && !flags.rehost) {
@@ -67,6 +64,18 @@ async function main() {
     const problems = checkDidDocument(await response.json(), { did, kid: backendEnv.PARTNER_PRIVATE_KEY_KID });
     if (problems.length) throw new Error(`DID document check failed:\n  ${problems.join('\n  ')}`);
     process.stdout.write(`Verified ${url}\n`);
+    // The DID document references this route; AIR expects its partnerId to be the registered Partner ID.
+    const infoUrl = `${origin.replace(/\/+$/, '')}/.well-known/air-partner-info`;
+    const info = await fetch(infoUrl, { signal: AbortSignal.timeout(10000) });
+    if (!info.ok) {
+      process.stdout.write(`Warning: GET ${infoUrl} returned HTTP ${info.status}; the reference backend serves { partnerId } there.\n`);
+    } else {
+      const { partnerId } = await info.json().catch(() => ({}));
+      if (backendEnv.PARTNER_ID && partnerId !== backendEnv.PARTNER_ID) {
+        throw new Error(`${infoUrl} returns partnerId ${partnerId ?? '(none)'}, but the backend PARTNER_ID is ${backendEnv.PARTNER_ID}. A running backend with stale configuration is the usual cause; restart it.`);
+      }
+      process.stdout.write(`Verified ${infoUrl}\n`);
+    }
     for (const endpoint of endpoints) {
       // Unauthenticated probes: guarded routes answer 401/403, a missing route answers 404.
       const probe = endpoint.method === 'Post'
@@ -95,7 +104,7 @@ async function main() {
   const didWebHost = did.slice('did:web:'.length);
   process.stdout.write(`Issuer DID: ${did}\n`);
   process.stdout.write(`Dashboard → Issuer → Settings → did:web Host: ${didWebHost}\n`);
-  process.stdout.write('Enter that host in did:web Host.\n');
+  process.stdout.write('Enter that host in did:web Host. The field accepts a hostname and rejects a did:web: value.\n');
   process.stdout.write('Dashboard → Issuer → Settings:\n');
 
   for (const endpoint of endpoints) {

@@ -11,7 +11,7 @@ Use this before implementing or repairing AIR SDK/API code. Read only the releva
 
 ## Focused sources
 
-Reviewed 2026-10-12 against AIR Kit 1.13.0; external contracts can change.
+Reviewed 2026-10-29 against AIR Kit 1.13.0; external contracts can change.
 
 - Credential formats (SD-JWT default, Iden3 advanced): https://docs.air3.com/products/identity/credential-formats
 - Issuance, Dashboard registration, direct issuance: https://docs.air3.com/products/identity/issuing-credentials
@@ -28,9 +28,13 @@ Reviewed 2026-10-12 against AIR Kit 1.13.0; external contracts can change.
 - Custom auth (BYO login): https://docs.air3.com/get-started/authentication/custom-auth
 - Sandbox and production: https://docs.air3.com/get-started/environments/about
 - Release notes: https://docs.air3.com/api-reference/release-notes
+- SDK errors (`AirKitError` codes and categories, 1.13+): https://docs.air3.com/help/error-codes
+- How issuance and verification work end to end (trust model, envelope, presentation, backend checks, results): https://docs.air3.com/technicals/architecture/how-credential-issuance-works and https://docs.air3.com/technicals/architecture/how-credential-verification-works
+- Keys, tokens, primitives, and rotation: https://docs.air3.com/technicals/architecture/keys-and-cryptography
+- Partner agent identity (bind, sessions, verify-by-agent, checkout): https://docs.air3.com/technicals/architecture/how-agentic-commerce-works and https://docs.air3.com/api-reference/agents/introduction
 - Iden3 (AIR-enabled accounts only): https://docs.air3.com/products/identity/iden3/issuing
 - Issuer backend: https://github.com/MocaNetwork/air-issuer-service/tree/main_sd-jwt-vc
 
-Known contract notes: `issueCredential` takes `credentialSubject: {}` because the backend supplies claims. SD-JWT `verifyCredential` requires `fieldsToDisclose`; `nonce` became optional in 1.12 but this skill always sends one and verifies the key-binding JWT. Issuance Partner JWTs (`issueCredential` and direct issuance) carry `scope: "issue"` and header `typ: "JWT"`, as the docs require; the reference issuer service's own tokens omit `typ` and do not default `scope` (see [auth.md](auth.md)). AIR login tokens verify against `https://static.sandbox.air3.com/.well-known/jwks.json`, then `https://account.sandbox-testnet.air3.com/.well-known/jwks.json`, then `https://static.air3.com/.well-known/jwks.json` in sandbox, and only `https://static.air3.com/.well-known/jwks.json` in production; the docs sessions page lists only the production URL. A live sandbox `verifyCredential` (2026-10-13, AIR Kit 1.13.0) returned `verifiableCredential[0]` as an `EnvelopedVerifiableCredential` whose `id` is `data:application/dc+sd-jwt,<token>`, as the docs show; the 1.13.0 type definitions instead declare SD-JWT entries as compact strings and give the object no `id`. Accept both, and pass the presentation to the backend untyped.
+Known contract notes: `issueCredential` takes `credentialSubject: {}` because the backend supplies claims. SD-JWT `verifyCredential` requires `fieldsToDisclose`; `nonce` became optional in 1.12 but this skill always sends one and verifies the key-binding JWT. Issuance Partner JWTs (`issueCredential` and direct issuance) carry `scope: "issue"` and header `typ: "JWT"`, as the docs require; the reference issuer service's own tokens omit `typ` and do not default `scope` (see [auth.md](auth.md)). AIR login tokens verify against `https://static.sandbox.air3.com/.well-known/jwks.json`, then `https://account.sandbox-testnet.air3.com/.well-known/jwks.json`, then `https://static.air3.com/.well-known/jwks.json` in sandbox, and only `https://static.air3.com/.well-known/jwks.json` in production, as the docs sessions page now lists. From AIR Kit 1.13.0 every `AirService` method rejects with `AirKitError` (`code`, `category`, `eventId`, `data`); `err.name` and `AirServiceError` are deprecated (see [polish.md](polish.md#sdk-errors-air-kit-113)). dStorage `externalId` is required and is the dedup key. A live sandbox `verifyCredential` (2026-10-13, AIR Kit 1.13.0) returned `verifiableCredential[0]` as an `EnvelopedVerifiableCredential` whose `id` is `data:application/dc+sd-jwt,<token>`, as the docs show; the 1.13.0 type definitions instead declare SD-JWT entries as compact strings and give the object no `id`. Accept both, and pass the presentation to the backend untyped.
 
 Snippets in recipes can use older initialization forms. Prefer installed SDK types over copying those snippets verbatim. For a genuinely unavailable method, report the incompatibility and the supported alternative instead of fabricating an API.

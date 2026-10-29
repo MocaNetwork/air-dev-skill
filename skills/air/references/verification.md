@@ -14,9 +14,11 @@ If an issued credential cannot be verified, inspect token scope/JWKS, selected n
 | `KB-JWT aud mismatch` | Presentation made for another `programId` |
 | `KB-JWT is too old` / `JWT is not yet valid` | KB-JWT `iat` outside the window; check server clock |
 | `Invalid sd_hash in Key Binding JWT` | Disclosures added or removed after the holder signed |
-| `Missing required claim keys` | A required field was not disclosed or not selectively disclosable; use dotted paths for nested claims |
+| `Missing required claim keys` | A required field was not disclosed or not selectively disclosable, or the issuer's issuance program has **Allow data disclosure** off (then no claims arrive at all); use dotted paths for nested claims |
 | `Unexpected vct` | A different credential type than `AIR_EXPECTED_VCT` |
 | `Status is not valid` | Revoked (status list checks only) |
+
+A backend revocation check (status endpoint or token status list) that cannot be fetched is a rejection: fail closed.
 
 `Revoked` is returned by `verifyCredential` only when the program enables issuer revocation checks and every matching credential is revoked. A browser-side `Compliant` with a failed backend check is a rejection, not a partial success.
 

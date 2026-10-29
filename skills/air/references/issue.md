@@ -22,7 +22,7 @@ The helper writes JWKS, token route, and an authentication adapter (plus verific
 
 `air-token-auth.ts` authenticates the AIR login token, which is a Bearer token: the client sends `Authorization: Bearer <token>` with `login().token` or `(await airService.getAccessToken()).token` on every `/api/partner-jwt` and verification request. The adapter:
 
-- Verifies the token against AIR's JWKS. Sandbox: `https://static.sandbox.air3.com/.well-known/jwks.json`, then `https://account.sandbox-testnet.air3.com/.well-known/jwks.json`, then `https://static.air3.com/.well-known/jwks.json`. Production: `https://static.air3.com/.well-known/jwks.json` only. Key IDs do not overlap; it moves to the next set only on `ERR_JWKS_NO_MATCHING_KEY` and rejects every other error. (The docs sessions page lists only the production URL.)
+- Verifies the token against AIR's JWKS. Sandbox: `https://static.sandbox.air3.com/.well-known/jwks.json`, then `https://account.sandbox-testnet.air3.com/.well-known/jwks.json`, then `https://static.air3.com/.well-known/jwks.json`. Production: `https://static.air3.com/.well-known/jwks.json` only. Key IDs do not overlap; it moves to the next set only on `ERR_JWKS_NO_MATCHING_KEY` and rejects every other error. The docs sessions page lists the same order.
 - Requires `payload.partnerId` to equal `PARTNER_ID` and `payload.sub` to be a non-empty string, and returns `sub` as the user id with the role's operations (`["issue"]` for an issuer app).
 - Rejects `Sec-Fetch-Site: cross-site` and allows `same-origin`/`same-site`. Otherwise it compares the `Origin` host with `x-forwarded-host` or `Host`: behind a tunnel, Next reports `request.url` as `https://localhost:<port>` while the browser `Origin` is the public host.
 
@@ -36,7 +36,7 @@ For another framework, adapt the server helpers to its routing and verified sess
 
 ## Direct issuance
 
-Implement the trusted backend event/job as a server-to-server call to `POST {ISSUER_ORIGIN}/admin/issue-vc` with `x-admin-api-key`, or adapt the backend's own equivalent. Validate the recipient and claims on the server, exclude reserved claims, and pass the registered `schemaId` and `vct`. Do not create a frontend or browser JWT route solely for direct issuance, and do not route it through the AIR-facing `/issue-vc`. Report success only after the request succeeds.
+Implement the trusted backend event/job as a server-to-server call to `POST {ISSUER_ORIGIN}/admin/issue-vc` with `x-admin-api-key`, or adapt the backend's own equivalent. Validate the recipient and claims on the server, exclude reserved claims, and pass the registered `schemaId` and `vct`. Use the recipient's own email, deduplicate by recipient and program, and revoke a superseded credential before issuing its replacement (see [issuance.md](issuance.md#direct-backend-issuance)). Do not create a frontend or browser JWT route solely for direct issuance, and do not route it through the AIR-facing `/issue-vc`. Report success only after the request succeeds.
 
 ## Public endpoints and registration
 

@@ -4,7 +4,9 @@ Inspect the existing authentication and client framework. Follow [sources.md](so
 
 ## AIR login
 
-Initialize AIR Kit with the installed version's supported options and invoke its login flow when needed. Reuse an existing session and avoid duplicate service initialization. Implement loading, cancellation (`USER_CANCELLED`, and `CHANNEL_CLOSED` when the popup or channel closes mid-flow), login failure, and logout/session cleanup using the actual return/event contract.
+Initialize AIR Kit with the installed version's supported options and invoke its login flow when needed. Reuse an existing session and avoid duplicate service initialization. Implement loading, cancellation, login failure, and logout/session cleanup using the actual return/event contract. In AIR Kit 1.13+ branch on `AirKitError` `code` with a `category` fallback: `auth/user-cancelled` and `window/closed` are cancellations, `network/channel-closed` means the popup or channel closed mid-flow, and `sdk/not-logged-in` or category `session` means sign in again. See [polish.md](polish.md#sdk-errors-air-kit-113).
+
+`abstractAccountAddress` in the login token and user info is optional: it is returned only after passkey MFA setup unless the partner opted out. Do not assume it exists after login.
 
 ## BYO login
 

@@ -27,7 +27,8 @@ curl -X POST "$ISSUER_ORIGIN/admin/issue-vc" \
         "expiration": "<future ISO 8601>", "credentialSubject": { ... }, "disclosureFrame": { "_sd": [ ... ] } }'
 ```
 
-- `userId` must be the email AIR knows the user by. The service resolves or creates the AIR Account with `POST {AIR_API_ORIGIN}/v2/auth/initialize-user`, which returns the holder DID, encryption public key, and signing public key, so direct credentials are holder-bound too.
+- `userId` must be the email AIR knows the user by, and it must be the individual recipient's own address, never a shared or service mailbox. The service resolves or creates the AIR Account with `POST {AIR_API_ORIGIN}/v2/auth/initialize-user`, which returns the holder DID, encryption public key, and the signing public key when present, so direct credentials are holder-bound too. If AIR returns no holder DID or encryption key, do not issue.
+- Deduplicate by recipient and program before calling. To change a credential (a tier upgrade), revoke the old one and then issue the new one, so the user never holds two current versions.
 - `credentialSubject` must not contain reserved claims: `cnf`, `exp`, `iat`, `id`, `iss`, `nonce`, `status`, `sub`, `vct`, `vct#integrity`. `disclosureFrame` is optional; by default every top-level claim is selectively disclosable.
 - No backend schema class is required for this route, but the Dashboard credential type and issuance program still are.
 - Only partner servers call `/admin/*`. Keep `ADMIN_API_KEY` out of browsers and logs. Persist and report results only after the request succeeds; history is at `GET /admin/issuance-history` when a database is configured.
@@ -37,9 +38,11 @@ A backend that implements the AIR calls itself uses two different surfaces:
 | Call | Host (sandbox / production) | Authentication |
 |---|---|---|
 | `POST /v2/auth/initialize-user` | `https://air.api.sandbox.air3.com` / `https://air.api.air3.com` | `x-partner-id: <PARTNER_ID>` header; body `{ "partnerJwt": <JWT with partnerId, scope "issue", recipient email> }` |
-| `POST /dstorage/vcs` | `https://api.sandbox.mocachain.org/v1` / `https://mocachain-mainnet.api.air3.com/v1` | `x-partner-auth: <Partner JWT with scope "issue", without email>`; body includes `holderDid`, `proofType: "SD_JWT_VC"`, `schemaId`, `expiresAt`, `data`, `iv`, `authTag`, `encryptedKey`, optional `externalId` |
+| `POST /dstorage/vcs` | `https://api.sandbox.mocachain.org/v1` / `https://mocachain-mainnet.api.air3.com/v1` | `x-partner-auth: <Partner JWT with scope "issue", without email>`; body includes `holderDid`, `proofType: "SD_JWT_VC"`, `schemaId`, `expiresAt`, `data`, `iv`, `authTag`, `encryptedKey`, and required `externalId` |
 
 The VC must carry the returned signing key in `cnf` and be encrypted to the returned encryption key before storage. Direct issuance does **not** call the AIR-facing `/issue-vc`.
+
+`externalId` is the dStorage dedup key: 16–255 characters from `[A-Za-z0-9._:-]` (a UUID or ULID works). The same value with identical bytes returns the existing object; the same value with different bytes returns `409`. Generate it once per credential and reuse it, with the same encrypted bytes, on every retry; use a new value only for new or corrected content. A `409` can also mean the user declined credentials from this issuer. dStorage answers `201` with a storage path (`dstorage://vc/…`) immediately and seals the object on Moca Chain in the background; to confirm, poll `GET /dstorage/vcs/status?path=<storagePath>` until `status` is `STORED`.
 
 Both paths preserve issuer authorization and source-data ownership. An identifier is lookup context, not proof of entitlement. AIR-supplied holder identity is trusted only over the authenticated AIR-to-issuer boundary. Direct jobs must resolve recipients through a trusted server flow.
 
@@ -53,13 +56,13 @@ Schema implementation: [schema.md](schema.md). Keep the backend's wire format an
 
 ### "Issuer is temporarily unavailable"
 
-The browser message "Issuer is temporarily unavailable" (`ISSUER_BACKEND_UNAVAILABLE`) comes from AIR's credential API, in sandbox `POST https://credential-testnet.api.sandbox.air3.com/v2/issuer/<partnerId>/issue-vc`. A 403, 502, or 503 there becomes that screen, and so does a 500 from the issuer's own `POST /issue-vc`. It does not prove the issuer is unreachable: on one traced claim AIR's call to `/available-vc` returned 201, and `/issue-vc` returned 500 because dStorage rejected the partner JWT.
+In AIR Kit 1.13+ the SDK rejects with `credential/issuer-not-ready` (category `network`). The browser message "Issuer is temporarily unavailable" (`ISSUER_BACKEND_UNAVAILABLE`) comes from AIR's credential API, in sandbox `POST https://credential-testnet.api.sandbox.air3.com/v2/issuer/<partnerId>/issue-vc`. A 403, 502, or 503 there becomes that screen, and so does a 500 from the issuer's own `POST /issue-vc`. It does not prove the issuer is unreachable: on one traced claim AIR's call to `/available-vc` returned 201, and `/issue-vc` returned 500 because dStorage rejected the partner JWT.
 
 Read the issuer log before diagnosing. The reference service does not log HTTP requests and Nest does not log 4xx, so add temporary request logging of method, path, status, `schemaId`, and the `x-api-key` length only (never the key, tokens, or claims). Then:
 
 - No issuer request: AIR is still calling the URL registered in the Dashboard, often a dead tunnel host. Compare it with `PARTNER.md` → Issuer endpoints.
 - Issuer 403: the Dashboard issuer API key does not match the backend `API_KEY`.
-- Issuer 201 on `/available-vc`, then 500 on `/issue-vc`: AIR reached the issuer, and the failure is inside issuance or dStorage. For dStorage `401 Invalid x-partner-auth`, check the Dashboard JWKS URL and `kid` as described in [auth.md](auth.md).
+- Issuer 201 on `/available-vc`, then 500 on `/issue-vc`: AIR reached the issuer, and the failure is inside issuance or dStorage. For dStorage `401 Invalid x-partner-auth`, check the Dashboard JWKS URL and `kid` as described in [auth.md](auth.md). For dStorage `409`, see `externalId` above.
 
 ## Revocation and status
 
@@ -67,4 +70,5 @@ All routes run on the issuer service and need a database:
 
 - Find a credential's `revocationNonce` with `GET /admin/issuance-history?holderDid=…&schemaId=…`, revoke with `POST /admin/revoke` `{ "nonce": "<revocationNonce>" }` (`x-admin-api-key`). Revocation is one-way; to change a credential, revoke it and issue a new one.
 - `GET /revocation-status/:nonce` returns `{ "isRevoked": boolean }` immediately and is registered as `revocationStatusApiUrl`.
-- Optional IETF Token Status List: set `SD_JWT_TSL_PARTITION_SIZE` (a multiple of 8) before the first credential that should carry `status`; it cannot change afterwards. Revocations reach verifiers only after `POST /admin/publish-token-status-list`, so schedule it from one runner and cache `GET /statuslist/:partition` no longer than the publish interval.
+- Optional IETF Token Status List: set `SD_JWT_TSL_PARTITION_SIZE` (a multiple of 8) before the first credential that should carry `status`; it cannot change afterwards. Revocations reach verifiers only after `POST /admin/publish-token-status-list`, so schedule it from one runner (minutes for fraud-sensitive types, hourly or nightly for routine changes) and cache `GET /statuslist/:partition` no longer than the publish interval. The list is valid/revoked only; there is no suspended state.
+- Revoking does not delete the stored envelope, and claims already disclosed to verifiers stay with them. Short expiry reduces how much revocation is needed.
