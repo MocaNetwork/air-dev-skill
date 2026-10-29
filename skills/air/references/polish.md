@@ -11,7 +11,7 @@ Improve the selected integration after checking [audit.md](audit.md).
 - AIR Kit loads its login flow in an iframe. If the app sets `Content-Security-Policy`, allow `frame-src` from `*.air3.com`.
 - For wallet features, prompt passkey MFA setup (`setupOrUpdateMfa()`) after login. MFA is required before wallet requests, and `abstractAccountAddress` is absent from user info and the login token until it is set up, unless the partner opted out of that gate. Treat it as optional.
 - Diagnose errors from the actual response and component. A 401 can involve token/JWKS/session configuration; a 403 from the issuer usually means the `x-api-key` mismatch. Neither proves a single cause.
-- Before handing off, remind the user that development tunnel domains in Account → Domains should be replaced by the real HTTPS domains for launch.
+- Before handing off, remind the user that development tunnel domains in Account → Domains (web app and issuer origin) should be replaced by the real HTTPS domains for launch.
 - Keep the issuer origin stable; it is the issuer DID and is embedded in revocation and status-list URLs.
 - Plan revocation before production: durable database, `/admin/revoke`, and, if used, a scheduled token status list publish.
 - Recheck affected code/configuration after edits and report remaining runtime prerequisites accurately.

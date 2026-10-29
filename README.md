@@ -54,7 +54,9 @@ Sandbox is the default. The agent collects only missing setup inputs: role, issu
 
 Credentials are **SD-JWT VC** (`SD_JWT_VC`), the AIR default. Iden3 is an advanced option the AIR team enables; the skill detects Iden3-era projects (`SEED`, `did:air`) and leaves them unchanged.
 
-Issuer setup: inspect/clone and install [`air-issuer-service@main_sd-jwt-vc`](https://github.com/MocaNetwork/air-issuer-service/tree/main_sd-jwt-vc) → configure the selected database (optional in sandbox) → generate/import existing keys → set a stable public HTTPS `ISSUER_ORIGIN` → derive and check the `did:web` issuer DID → register issuer/endpoints → configure credential types (`vct`) and programs. The issuer DID is `did:web:<host of ISSUER_ORIGIN>`, so the host is permanent once you issue.
+Issuer setup: inspect/clone and install [`air-issuer-service@main_sd-jwt-vc`](https://github.com/MocaNetwork/air-issuer-service/tree/main_sd-jwt-vc) → configure the selected database (optional in sandbox) → generate/import existing keys → set a stable public HTTPS `ISSUER_ORIGIN` → derive and check the `did:web` issuer DID → register issuer/endpoints (save did:web Host, and whitelist both the issuer origin and the web app origin under Account → Domains) → configure credential types (`vct`) and programs. The issuer DID is `did:web:<host of ISSUER_ORIGIN>`, so the host is permanent once you issue.
+
+On a new account, no schema, issuance program, or verification program can be created until **Issuer → Settings → did:web Host** is saved, whatever the role. Verifier-only apps enter their own domain there and need no issuer backend.
 
 Credential types: describe the credential you want to issue and `/air schema` does the rest. It writes `air/credentials/<name>.json`, generates the `vct` URL (served by the issuer at `${ISSUER_ORIGIN}/vct/<name>/v1`) and its SD-JWT VC Type Metadata, and prints the four Dashboard values to paste into **Issuer → Schemas → SD-JWT VCT details** (Title, Description, VCT, VCT JSON). Give it the schema ID after you publish and it generates and registers the backend schema class.
 

@@ -2,6 +2,8 @@
 
 The user describes the credential they want to issue; the skill produces everything else. The Dashboard form is filled by the user, because it is session-authenticated and has no partner API: the skill prepares every value to paste and records what comes back. Read current Dashboard documentation via [sources.md](sources.md), and inspect the checked-out backend before relying on the class shape below.
 
+Prerequisite: on a new account the Dashboard does not allow creating a schema or program until **Issuer → Settings → did:web Host** is saved ([register.md](register.md#didweb-host-gate-every-role-every-new-account)). Steps 1–2 can be prepared locally beforehand, but confirm the host is saved before sending the user to **Issuer → Schemas**.
+
 ## 1. Collect the credential design
 
 Ask with the Credential questions in [questions.md](questions.md): what the credential proves, its claims (name, type, label), which claims a holder may disclose on their own, whether each is always present, validity period, where the data comes from, and where the `vct` URL lives. Prefer derived claims (`tier`, `over_18`) to raw PII. Reserved claims (`id`, `iss`, `sub`, `vct`, `cnf`, `exp`, `iat`, `nbf`, `nonce`, `status`) are set by the issuer service and cannot be claims.
@@ -66,7 +68,7 @@ Register only the real schema. Once it is registered, remove the bundled sample 
 
 ## 4. Issuance program
 
-Create and publish an issuance program under **Issuer → Programs** with that schema record and the `SD_JWT_VC` proof type. If verifiers should receive any claim values, expand **Advanced set up** and turn on **Allow data disclosure**, then save. Without it, `fieldsToDisclose` is ignored: verification still returns `Compliant`, but the presentation carries no disclosed claims, so a backend that requires claims rejects every presentation. Tell the user to set it; do not assume it is on.
+Create and publish an issuance program under **Issuer → Programs** with that schema record and the `SD_JWT_VC` proof type.
 
 Record the program ID separately; the SDK's `credentialId` is the issuance program ID, while the backend works with `schemaId`. Iden3 schemas (JSON-LD contexts, Schema Builder) apply only to AIR-enabled Iden3 accounts.
 

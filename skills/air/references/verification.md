@@ -22,4 +22,4 @@ A backend revocation check (status endpoint or token status list) that cannot be
 
 `Revoked` is returned by `verifyCredential` only when the program enables issuer revocation checks and every matching credential is revoked. A browser-side `Compliant` with a failed backend check is a rejection, not a partial success.
 
-Missing Dashboard menus are an account access/configuration problem to investigate using [register.md](register.md), not proof that a verifier must create its own issuer.
+Missing schema or program menus on a new account first mean **Issuer → Settings → did:web Host** is not saved yet; a verifier-only app saves its own domain there ([register.md](register.md#didweb-host-gate-every-role-every-new-account)). They are not proof that a verifier must create its own issuer.

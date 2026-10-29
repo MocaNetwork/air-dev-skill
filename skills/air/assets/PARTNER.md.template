@@ -48,6 +48,7 @@ Registered in Dashboard → Issuer → Settings. Written by `issuer-did.mjs` fro
 
 ## Registration
 
+- DID host saved: {{didHostSaved}}
 - Issuer registered: {{issuerRegistered}}
 - JWKS registered: {{jwksRegistered}}
 - Domain whitelisted: {{domainWhitelisted}}

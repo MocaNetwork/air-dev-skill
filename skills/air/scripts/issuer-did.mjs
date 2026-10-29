@@ -90,7 +90,7 @@ async function main() {
     'Issuer DID': did,
     'Issuer origin': origin.replace(/\/+$/, ''),
     ...Object.fromEntries(endpoints.map(endpoint => [endpoint.label, endpoint.url])),
-    ...(rehost ? { 'Issuer registered': 'no' } : {}),
+    ...(rehost ? { 'DID host saved': 'no', 'Issuer registered': 'no', 'Domain whitelisted': 'no' } : {}),
   });
   ensureGitignore(root, ['.env', '.env.local', '.env.*.local', 'apps/backend/.env']);
 
@@ -105,16 +105,19 @@ async function main() {
   process.stdout.write(`Issuer DID: ${did}\n`);
   process.stdout.write(`Dashboard → Issuer → Settings → did:web Host: ${didWebHost}\n`);
   process.stdout.write('Enter that host in did:web Host. The field accepts a hostname and rejects a did:web: value.\n');
+  process.stdout.write('On a new account, no schema or program can be created until did:web Host is saved.\n');
   process.stdout.write('Dashboard → Issuer → Settings:\n');
 
   for (const endpoint of endpoints) {
     process.stdout.write(`  ${endpoint.label} (${endpoint.field}): ${endpoint.url}${endpoint.verified ? '' : '  (route not found in backend source; confirm it)'}\n`);
   }
+  process.stdout.write(`Dashboard → Account → Domains: whitelist ${new URL(origin).origin} (the issuer origin) and the web app origin that loads AIR Kit.\n`);
   process.stdout.write(`Wrote Issuer DID and endpoint URLs to ${written.join(' and ')}\n`);
   if (!flags.check) process.stdout.write('Run with --check once the backend is reachable to confirm /.well-known/did.json.\n');
   if (rehost) {
     process.stdout.write(`\nRehosted from ${recorded}. Issuer registration is now unconfirmed. Update together:\n`);
     process.stdout.write(`  - Dashboard → Issuer → Settings: set did:web Host to ${didWebHost} and replace the three URLs above\n`);
+    process.stdout.write(`  - Dashboard → Account → Domains: whitelist ${new URL(origin).origin} and remove the old issuer domain\n`);
     process.stdout.write('  - Credential types hosted on the issuer origin: vct.mjs plan --replace, then vct.mjs schema --rehost, then register the new VCT in the Dashboard\n');
     process.stdout.write('  - If the web host changed too: provision.mjs write-ids --jwks-url <new> --jwks-registered no --domain-whitelisted no, then update the Dashboard JWKS URL and domain\n');
   }

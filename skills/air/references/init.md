@@ -60,13 +60,13 @@ node <skill-base-dir>/scripts/init.mjs --role <role> --partner-id <uuid> --auth 
 
    The helper derives `did:web:<host>` from `ISSUER_ORIGIN` exactly as the backend does, confirms `/.well-known/did.json` serves that `id` with `<did>#<kid>` as an assertion method, and records it. It also records the full URLs of the **Available Credentials API**, **Issue Credential API**, and **Revocation Status API** in `PARTNER.md` → Issuer endpoints, resolved from the backend's actual routes, and with `--check` probes each one (a guarded route answers 403 without the API key; 404 means the path is wrong). It refuses localhost/HTTP origins and a host that differs from a recorded DID. On failure, diagnose the backend or tunnel; do not change keys.
 
-6. Continue [issue.md](issue.md) for the chosen trigger, [register.md](register.md) for setup, and [schema.md](schema.md) for credential types and issuance programs. Build local code while registration is pending; attempt real credentials only after prerequisites are confirmed.
+6. Continue [issue.md](issue.md) for the chosen trigger, [register.md](register.md) for setup, and [schema.md](schema.md) for credential types and issuance programs. On a new account, the did:web Host from step 5 must be saved in **Issuer → Settings** before any schema or program can be created, and both the `ISSUER_ORIGIN` host and the web app origin must be whitelisted under **Account → Domains**. Build local code while registration is pending; attempt real credentials only after prerequisites are confirmed.
 
 ## Verifier / account login
 
 No issuer backend or issuer API keys. For verifier or BYO login, use the same keys command: it generates signing keys only, or imports `PARTNER_ID`, `PARTNER_PRIVATE_KEY_KID`, `PARTNER_PRIVATE_KEY_DER`, and optional public `PARTNER_JWKS` (`SD_JWT_JWKS` is accepted as a fallback name).
 
-Create/use the recorded web application, emit missing routes, connect authentication, and register public JWKS. Then use [verify.md](verify.md) or [account.md](account.md). AIR login alone does not require generating issuer secrets. If the Dashboard lacks credential access, inspect the actual account state with [register.md](register.md); do not automatically turn a verifier into an issuer.
+Create/use the recorded web application, emit missing routes, connect authentication, and register public JWKS. Then use [verify.md](verify.md) or [account.md](account.md). AIR login alone does not require generating issuer secrets. A verifier on a new account saves **Issuer → Settings → did:web Host** with the app's own domain before it can create a verification program ([register.md](register.md#didweb-host-gate-every-role-every-new-account)); this needs no issuer backend. Do not turn a verifier into an issuer to get past it.
 
 ## Agentic
 

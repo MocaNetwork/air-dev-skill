@@ -79,6 +79,7 @@ Propose `title`, `description`, `name`, and claim labels from the answers; ask o
 
 - Unknown issuance trigger during `/air issue`: the Issuance question above.
 - Verification inputs: Program ("Do you have the published verification program ID?" — I have it — type it in · Not yet — walk me through the Dashboard), and Issuers ("Which issuers should your backend accept?" — the recorded issuer DID · Another did:web issuer — type it in).
-- Domain: "Have you whitelisted `<tunnel or app domain>` under Account → Domains?" — Yes, it's whitelisted · Not yet — show me where. AIR Kit does not load until it is; record `--domain-whitelisted yes` only after "Yes".
+- Domain: "Have you whitelisted `<web app domain>` under Account → Domains?" — for issuer roles name both domains: "Have you whitelisted `<web app domain>` and the issuer origin `<ISSUER_ORIGIN host>` under Account → Domains?" — Yes, both are whitelisted · Not yet — show me where. Always ask it when guiding the issuer endpoint fields. AIR Kit does not load until the web domain is whitelisted; record `--domain-whitelisted yes` only after "Yes".
+- did:web Host: "Have you saved `<host>` as did:web Host under Issuer → Settings?" (the `issuer-did.mjs` host for issuers; the app's own domain for verifier-only) — Yes, it's saved · Not yet — show me where. Ask before sending the user to create any schema or program; record `--did-host-saved yes` only after "Yes".
 - Registration state: "Have you saved this in the Dashboard?" — Yes, it's saved · Not yet — show me the fields. Record `provision.mjs` state only after "Yes".
 - `/air` with no task: offer the recommended next commands from [routing.md](routing.md) as the options, each with its reason as the description.

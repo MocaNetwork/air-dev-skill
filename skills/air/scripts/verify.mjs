@@ -19,6 +19,7 @@ function main() {
   process.stdout.write(`Configuration checklist only; this does not test live verification.\n`);
   process.stdout.write(`Verification checklist (${role || 'unset'})\n`);
   process.stdout.write(`- Partner ID present: ${Boolean(f['Partner ID'])}\n`);
+  process.stdout.write(`- did:web Host saved (Issuer → Settings): ${f['DID host saved'] === 'yes' || f['Issuer registered'] === 'yes' ? 'yes' : '(not confirmed — a new account cannot create a verification program until it is saved; verifier-only uses the app domain)'}\n`);
   process.stdout.write(`- Verification program IDs: ${f['Verification program IDs'] || '(missing — Dashboard → Verifier → Programs)'}\n`);
   process.stdout.write(`- JWKS URL: ${f['JWKS URL'] || '(needed: AIR validates the verify-scoped Partner JWT against it)'}\n`);
   process.stdout.write(`- Trusted issuers: ${f['Trusted issuers'] || '(missing — did:web issuer DIDs your backend accepts)'}\n`);

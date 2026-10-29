@@ -112,6 +112,23 @@ test('verifier flow creates signing keys, scopes tokens and records registration
   run(root, 'provision', ['--env', 'sandbox', 'write-ids', '--trusted-issuer', 'did:air:id:legacy'], false);
 });
 
+test('did:web Host gates program creation on every role before any program exists', t => {
+  const gate = root => recommend(collectSignals(root)).some(item => /did:web Host/.test(item.reason));
+  const verifier = path.join(workspace(t), 'verifier'); fs.mkdirSync(verifier);
+  init(verifier, 'verifier', ['--frontend', 'next']);
+  assert.equal(loadPartner(verifier).fields['DID host saved'], 'no');
+  assert.equal(gate(verifier), true);
+  assert.match(run(verifier, 'verify').stdout, /did:web Host saved.*not confirmed/);
+  run(verifier, 'provision', ['--env', 'sandbox', 'write-ids', '--did-host-saved', 'yes']);
+  assert.equal(gate(verifier), false);
+  assert.equal(loadPartner(verifier).fields['Issuer registered'], 'no');
+
+  const issuer = path.join(workspace(t), 'issuer'); fs.mkdirSync(issuer);
+  init(issuer, 'issuer');
+  run(issuer, 'provision', ['--env', 'sandbox', 'write-ids', '--issuer-registered', 'yes']);
+  assert.equal(loadPartner(issuer).fields['DID host saved'], 'yes');
+});
+
 test('account-only BYO auth creates signing keys and dedicated trusted login claims', t => {
   const root = workspace(t); init(root, 'account-only', ['--auth', 'byo']); run(root, 'keys', ['--env', 'sandbox']);
   const result = signPartnerToken(env(root, '.env.local'), { operation: 'login', user: { email: 'verified@example.com' } });
@@ -151,8 +168,11 @@ test('issuer DID is derived from a public ISSUER_ORIGIN and cannot silently chan
   assert.equal(detect(root).some(item => item.id === 'issuer-did-origin-mismatch'), true);
   assert.equal(detect(root).some(item => item.id === 'issuer-endpoint-mismatch'), true);
   updatePartnerFields(root, { 'Issuer registered': 'yes' });
-  run(root, 'issuer-did', ['--rehost']);
+  updatePartnerFields(root, { 'DID host saved': 'yes', 'Domain whitelisted': 'yes' });
+  assert.match(run(root, 'issuer-did', ['--rehost']).stdout, /Account → Domains: whitelist https:\/\/new-tunnel\.example\.com/);
   const moved = loadPartner(root).fields;
+  assert.equal(moved['DID host saved'], 'no');
+  assert.equal(moved['Domain whitelisted'], 'no');
   assert.equal(moved['Issuer DID'], 'did:web:new-tunnel.example.com');
   assert.equal(moved['Issue Credential API'], 'https://new-tunnel.example.com/issue-vc');
   assert.equal(moved['Issuer registered'], 'no');

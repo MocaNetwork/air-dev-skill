@@ -23,7 +23,9 @@ Options:
   --issue-program-id --verify-program-id --schema-id
   --vct <credential type>          registered SD-JWT credential type
   --trusted-issuer <did:web:...>   issuer accepted by the backend presentation check
-  --issuer-registered yes|no       (alias: --activated) Dashboard Issuer → Settings saved
+  --did-host-saved yes|no          Dashboard Issuer → Settings → did:web Host saved (every role;
+                                   no schema or program can be created before it)
+  --issuer-registered yes|no       (alias: --activated) Dashboard Issuer → Settings saved; yes implies --did-host-saved yes
   --jwks-registered yes|no --domain-whitelisted yes|no
   --project <dir>
 `);
@@ -65,7 +67,8 @@ function writeIds(root, envName, flags) {
   if (flags.vct) updates['Credential types (vct)'] = flags.vct;
   if (flags['trusted-issuer']) updates['Trusted issuers'] = flags['trusted-issuer'];
   if (flags.activated && !flags['issuer-registered']) flags['issuer-registered'] = flags.activated;
-  for (const [flag, label] of [['issuer-registered', 'Issuer registered'], ['jwks-registered', 'JWKS registered'], ['domain-whitelisted', 'Domain whitelisted']]) {
+  if (flags['issuer-registered'] === 'yes' && !flags['did-host-saved']) flags['did-host-saved'] = 'yes';
+  for (const [flag, label] of [['did-host-saved', 'DID host saved'], ['issuer-registered', 'Issuer registered'], ['jwks-registered', 'JWKS registered'], ['domain-whitelisted', 'Domain whitelisted']]) {
     if (['yes', 'no'].includes(flags[flag])) updates[label] = flags[flag];
   }
 

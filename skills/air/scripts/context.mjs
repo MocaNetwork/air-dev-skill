@@ -57,6 +57,8 @@ export function collectSignals(root) {
       issuerDid: presentId(partner.fields, 'Issuer DID'),
       jwksUrl: presentId(partner.fields, 'JWKS URL'),
       issuerRegistered: /^(yes|true|done)$/i.test(partner.fields['Issuer registered'] || partner.fields['Issuer activated'] || ''),
+      didHostSaved: /^(yes|true|done)$/i.test(partner.fields['DID host saved'] || partner.fields['Issuer registered'] || partner.fields['Issuer activated'] || ''),
+      hasVerifyProgram: Boolean(presentId(partner.fields, 'Verification program IDs')),
       issuerOriginPublic: /^https:\/\//.test(backendEnv.ISSUER_ORIGIN || '') && !/localhost|127\.0\.0\.1/.test(backendEnv.ISSUER_ORIGIN || ''),
       legacyIden3,
       jwksRegistered: /^(yes|true|done)$/i.test(partner.fields['JWKS registered'] || ''),
@@ -121,13 +123,16 @@ export function recommend(signals) {
     picks.push({ cmd: '/air issue', reason: 'No JWKS route in the repo. Emit stubs after the frontend exists.' });
   }
   if (needs.issuer && partner.issuerDid && !partner.issuerRegistered) {
-    picks.push({ cmd: '/air register', reason: 'did:web issuer DID is known; issuer registration is not confirmed.' });
+    picks.push({ cmd: '/air register', reason: 'did:web issuer DID is known; save did:web Host and the issuer endpoints, and whitelist the issuer and web origins. No schema or program can be created before did:web Host is saved.' });
   }
   if (needs.issuer && partner.issuerRegistered && partner.issuanceTrigger !== 'direct' && partner.frontend !== 'none' && !scan.hasIssueCall) {
     picks.push({ cmd: '/air issue', reason: 'Issuer is registered but there is no issue call yet.' });
   }
   if (!needs.issuer && ['verifier', 'account-only'].includes(partner.role) && signals.secrets.missing.includes('PARTNER_PRIVATE_KEY_DER') && (needs.verifier || partner.authModel === 'byo')) {
     picks.push({ cmd: '/air keys', reason: 'Configure server signing keys for this app.' });
+  }
+  if (needs.verifier && !needs.issuer && !partner.didHostSaved && !partner.hasVerifyProgram) {
+    picks.push({ cmd: '/air register', reason: 'Save Issuer → Settings → did:web Host (your app domain) first; a new account cannot create a verification program until it is saved.' });
   }
   if ((needs.verifier || needs.issuer) && !partner.jwksRegistered) picks.push({ cmd: '/air register', reason: 'Public JWKS registration is not yet confirmed.' });
   if ((needs.verifier || scan.hasIssueCall) && !scan.hasVerifyCall && needs.verifier) {

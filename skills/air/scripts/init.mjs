@@ -138,6 +138,7 @@ function main() {
     availableVcApiUrl: issuer ? 'pending — run issuer-did' : 'none',
     issueVcApiUrl: issuer ? 'pending — run issuer-did' : 'none',
     revocationStatusApiUrl: issuer ? 'pending — run issuer-did' : 'none',
+    didHostSaved: 'no',
     issuerRegistered: 'no',
     jwksRegistered: 'no',
     domainWhitelisted: 'no',
