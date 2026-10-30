@@ -1,10 +1,21 @@
 # AIR Dev skill
 
+> [!WARNING]
+> Package install is not ready yet. Download this repository and copy the [`skills/air`](skills/air) folder into your agent skills directory, then reload the agent and type `/air`.
+>
+> - Cursor: `~/.cursor/skills/air` or `<project>/.cursor/skills/air`
+> - Claude Code: `~/.claude/skills/air` or `<project>/.claude/skills/air`
+> - Codex: `~/.codex/skills/air`
+> - OpenCode: `~/.opencode/skills/air`
+> - GitHub Copilot: `<project>/.github/skills/air`
+
  AIR Kit integration skill: one entry point (`/air <cmd>`), traveling `PARTNER.md` + `AIR.md`, scripts that change project state, and static detectors.
 
 This is not the docs-routing skill (`npx skills add https://docs.air3.com`) and not the wallet skill (`npx skills add MocaNetwork/air-agentic-wallet-skill`). Those still matter. This skill is the integration operator.
 
 ## Install
+
+The commands below are not available yet. Use the manual copy in the warning at the top until package install ships.
 
 From the project root:
 
